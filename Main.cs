@@ -44,6 +44,7 @@ namespace HomingThrowQuest
 
                 if (isLockedInMode)
                 {
+                    // Safe index trigger check using BoneLib's Controller references
                     bool isTriggerPressed = Player.leftController != null && Player.leftController.GetIndexTouchpad();
                     
                     if (isTriggerPressed && !isTargetLocked)
@@ -55,9 +56,3 @@ namespace HomingThrowQuest
                         ResetLock();
                     }
                 }
-            }
-
-            TrackHandReleaseSpeed();
-        }
-
-        public override void
