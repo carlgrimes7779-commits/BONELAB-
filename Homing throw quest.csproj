@@ -7,20 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="MelonLoader">
-      <HintPath>Refs/MelonLoader.dll</HintPath>
-    </Reference>
-    <Reference Include="BoneLib">
-      <HintPath>Refs/BoneLib.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>Refs/UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Refs/UnityEngine.CoreModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>Refs/UnityEngine.PhysicsModule.dll</HintPath>
-    </Reference>
+    <PackageReference Include="LavaGang.MelonLoader" Version="0.6.1" />
+    <PackageReference Include="gnonme.BoneLib" Version="3.0.0" />
   </ItemGroup>
 </Project>
