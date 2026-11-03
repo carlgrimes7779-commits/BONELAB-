@@ -35,10 +35,21 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateFunction("❌ Reset Target (Offhand Trigger Alternative)", Color.red, () => 
+            category.CreateFunction("🎯 Lock Target (Right Hand Aim)", Color.green, () => 
+            {
+                Camera cam = Camera.main;
+                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
+                {
+                    isLockedIn = true;
+                    currentTargetTransform = hit.transform;
+                    MelonLogger.Msg($"Locked target: {hit.transform.name}");
+                }
+            });
+
+            category.CreateFunction("❌ Delete / Reset Lock (Offhand Action)", Color.red, () => 
             {
                 ResetHomingState();
-                MelonLogger.Msg("Lock-In Deleted / Reset.");
+                MelonLogger.Msg("Lock-In state reset.");
             });
         }
 
@@ -46,26 +57,13 @@ namespace HomingThrowMod
         {
             if (!isHomingEnabled) return;
 
-            // Initialize visual elements if missing
             if (targetReticle == null) CreateCrosshairReticle();
             if (laserLineObj == null) CreateLaserLine();
 
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            // Use camera/head or simulated hand pointers for standalone stability
             Transform pointer = cam.transform;
-
-            // 1. Offhand Trigger Action: Delete / Unlock Lock-In Mode
-            bool offhandDeleteTrigger = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton1);
-            if (offhandDeleteTrigger && isLockedIn)
-            {
-                ResetHomingState();
-                MelonLogger.Msg("Lock-in deleted via offhand trigger action.");
-            }
-
-            // 2. Right Hand / Primary Trigger Action: Lock In Target
-            bool rightHandLockTrigger = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton0);
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -74,6 +72,7 @@ namespace HomingThrowMod
                 {
                     targetReticle.transform.position = targetPosition;
                     targetReticle.transform.LookAt(cam.transform);
+                    targetReticle.transform.localScale = new Vector3(0.15f, 0.15f, 0.15f); // Clean dot indicator
                     targetReticle.SetActive(true);
                 }
                 if (laserLine != null) laserLine.enabled = false;
@@ -84,7 +83,6 @@ namespace HomingThrowMod
                 {
                     targetPosition = hit.point;
 
-                    // Update laser line from pointer to hit point
                     if (laserLine != null)
                     {
                         laserLine.enabled = true;
@@ -102,14 +100,6 @@ namespace HomingThrowMod
                         targetReticle.transform.localScale = new Vector3(scale, scale, scale);
                         targetReticle.SetActive(true);
                     }
-
-                    // Lock-in triggered by right hand
-                    if (rightHandLockTrigger)
-                    {
-                        isLockedIn = true;
-                        currentTargetTransform = hit.transform;
-                        MelonLogger.Msg($"Locked onto target: {hit.transform.name}");
-                    }
                 }
                 else
                 {
@@ -118,7 +108,7 @@ namespace HomingThrowMod
                 }
             }
 
-            // 3. Homing Physics for Blunt and Bladed Objects Only
+            // Homing trajectory logic for blunt and bladed weapons
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -128,84 +118,11 @@ namespace HomingThrowMod
                     {
                         if (rb != null && rb.velocity.magnitude > 3f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            // Filter specifically for blunt/bladed handheld objects (knives, melee items, physics props)
                             string objName = rb.gameObject.name.ToLower();
                             bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
-                                                 objName.Contains("hammer") || objName.Contains("melee") || objName.Contains("prop") || 
-                                                 objName.Contains("blunt") || rb.mass < 15f;
+                                                 objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || 
+                                                 objName.Contains("prop") || rb.mass < 15f;
 
                             if (isBluntOrBladed)
                             {
-                                trackedThrownObject = rb;
-                                MelonLogger.Msg($"Tracking thrown blunt/bladed object: {rb.gameObject.name}");
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Apply high-speed curve toward the target
-                if (trackedThrownObject != null)
-                {
-                    if (currentTargetTransform != null)
-                    {
-                        targetPosition = currentTargetTransform.position;
-                    }
-
-                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
-                    float boostedSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude * 1.5f, 25f);
-                    
-                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * boostedSpeed, Time.deltaTime * 20f);
-                }
-            }
-        }
-
-        private static void ResetHomingState()
-        {
-            isLockedIn = false;
-            currentTargetTransform = null;
-            trackedThrownObject = null;
-            if (targetReticle != null) targetReticle.SetActive(false);
-            if (laserLine != null) laserLine.enabled = false;
-        }
-
-        private static void CreateCrosshairReticle()
-        {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingCrosshairBullseye";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null) UnityEngine.Object.Destroy(col);
-
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Shader sh = Shader.Find("Unlit/Color");
-                if (sh != null)
-                {
-                    renderer.material.shader = sh;
-                    renderer.material.color = new Color(0f, 1f, 1f, 1f); // Bright Cyan
-                }
-            }
-            targetReticle.SetActive(false);
-        }
-
-        private static void CreateLaserLine()
-        {
-            laserLineObj = new GameObject("HomingLaserPointer");
-            laserLine = laserLineObj.AddComponent<LineRenderer>();
-            laserLine.startWidth = 0.02f;
-            laserLine.endWidth = 0.02f;
-            laserLine.positionCount = 2;
-
-            Shader sh = Shader.Find("Unlit/Color");
-            if (sh != null)
-            {
-                laserLine.material = new Material(sh);
-                laserLine.material.color = Color.cyan;
-            }
-            laserLine.enabled = false;
-        }
-    }
-}
+                                tracked
