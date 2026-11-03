@@ -13,16 +13,15 @@ namespace HomingThrowMod
         public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
-        private static GameObject targetReticle;
-        private static Transform currentTargetTransform;
+        private static GameObject? targetReticle;
+        private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody currentThrownBody;
+        private static Rigidbody? currentThrownBody;
 
         public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Homing Throw Mod Initialized!");
 
-            // Create BoneMenu UI entry
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -46,18 +45,16 @@ namespace HomingThrowMod
         {
             if (!isHomingEnabled) return;
 
-            // Initialize visual reticle sphere if missing
             if (targetReticle == null)
             {
                 CreateTargetReticle();
             }
 
-            // Raycast targeting logic from hand or head
-            if (Player.PhysicsRig != null)
+            Camera cam = Camera.main;
+            if (cam != null)
             {
-                Transform pointerTransform = Player.RightHand != null ? Player.RightHand.transform : Player.Head.transform;
+                Transform pointerTransform = cam.transform;
 
-                // Lock-In tracking mode
                 if (isLockedIn && currentTargetTransform != null)
                 {
                     targetPosition = currentTargetTransform.position;
@@ -69,7 +66,6 @@ namespace HomingThrowMod
                 }
                 else
                 {
-                    // Raycast forward to locate surface or enemy NPC
                     if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                     {
                         targetPosition = hit.point;
@@ -79,12 +75,12 @@ namespace HomingThrowMod
                             targetReticle.SetActive(true);
                         }
 
-                        // Right index trigger click locks target
-                        if (Player.RightController != null && Player.RightController.GetIndexDown())
+                        // Lock target when clicking mouse or primary button input
+                        if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton0))
                         {
                             isLockedIn = true;
                             currentTargetTransform = hit.transform;
-                            MelonLogger.Msg($"Target Locked onto: {hit.transform.name}");
+                            MelonLogger.Msg(string.Format("Target Locked onto: {0}", hit.transform.name));
                         }
                     }
                     else if (!isLockedIn && targetReticle != null)
@@ -93,8 +89,8 @@ namespace HomingThrowMod
                     }
                 }
 
-                // Menu button click unlocks target
-                if (isLockedIn && Player.RightController != null && Player.RightController.GetMenuButtonDown())
+                // Unlock target on secondary button
+                if (isLockedIn && (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton1)))
                 {
                     isLockedIn = false;
                     currentTargetTransform = null;
@@ -102,12 +98,10 @@ namespace HomingThrowMod
                 }
             }
 
-            // Apply trajectory force to thrown object towards target position
             if (currentThrownBody != null)
             {
                 Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
                 float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 15f);
-                
                 currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 12f);
             }
         }
@@ -121,7 +115,7 @@ namespace HomingThrowMod
             Collider col = targetReticle.GetComponent<Collider>();
             if (col != null)
             {
-                Object.Destroy(col);
+                GameObject.Destroy(col);
             }
 
             Renderer renderer = targetReticle.GetComponent<Renderer>();
