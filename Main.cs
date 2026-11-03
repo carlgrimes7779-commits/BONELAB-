@@ -1,6 +1,5 @@
 using MelonLoader;
 using BoneLib;
-using BoneLib.BoneMenu;
 using UnityEngine;
 
 [assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.0.0", "Author")]
@@ -10,140 +9,167 @@ namespace HomingThrowMod
 {
     public class HomingThrowMod : MelonMod
     {
-        public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
         private static GameObject? targetReticle;
         private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
+        private static Rigidbody? currentThrownBody;
 
         public override void OnInitializeMelon()
         {
-            try
-            {
-                MelonLogger.Msg("Initializing Homing Throw Mod safely...");
-
-                Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
-
-                category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
-                {
-                    isHomingEnabled = value;
-                    if (!isHomingEnabled && targetReticle != null)
-                    {
-                        targetReticle.SetActive(false);
-                        isLockedIn = false;
-                    }
-                });
-
-                category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
-                {
-                    isLockedIn = value;
-                    if (!isLockedIn)
-                    {
-                        currentTargetTransform = null;
-                    }
-                });
-
-                category.CreateFunction("🔒 Lock Target Now", Color.cyan, () => 
-                {
-                    Camera cam = Camera.main;
-                    if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 100f))
-                    {
-                        isLockedIn = true;
-                        currentTargetTransform = hit.transform;
-                    }
-                });
-
-                category.CreateFunction("❌ Reset Target", Color.red, () => 
-                {
-                    isLockedIn = false;
-                    currentTargetTransform = null;
-                });
-            }
-            catch (System.Exception ex)
-            {
-                MelonLogger.Error($"Error during initialization: {ex.Message}");
-            }
+            MelonLogger.Msg("Homing Throw Mod Initialized Successfully.");
         }
 
         public override void OnUpdate()
         {
-            try
+            // Check if player is holding an item in either hand
+            bool isHoldingItem = false;
+            Transform? offhandTransform = null;
+
+            if (Player.PhysicsRig != null)
             {
-                if (!isHomingEnabled) return;
+                // Determine active holding state and offhand pointer
+                bool rightHolding = Player.RightHand != null && Player.RightHand.HasJointGrab();
+                bool leftHolding = Player.LeftHand != null && Player.LeftHand.HasJointGrab();
 
-                if (targetReticle == null)
+                if (rightHolding)
                 {
-                    CreateHolographicReticle();
+                    isHoldingItem = true;
+                    offhandTransform = Player.LeftHand != null ? Player.LeftHand.transform : null;
                 }
-
-                Camera cam = Camera.main;
-                if (cam != null && targetReticle != null)
+                else if (leftHolding)
                 {
-                    Transform pointerTransform = cam.transform;
+                    isHoldingItem = true;
+                    offhandTransform = Player.RightHand != null ? Player.RightHand.transform : null;
+                }
+            }
 
-                    if (isLockedIn && currentTargetTransform != null)
+            // If not holding anything, hide the reticle and unlock target
+            if (!isHoldingItem)
+            {
+                if (targetReticle != null) targetReticle.SetActive(false);
+                isLockedIn = false;
+                currentTargetTransform = null;
+                return;
+            }
+
+            // Ensure our visible bullseye/crosshair reticle exists
+            if (targetReticle == null)
+            {
+                CreateBullseyeReticle();
+            }
+
+            // Use offhand controller position/rotation as the aiming pointer
+            Transform pointer = offhandTransform != null ? offhandTransform : (Camera.main != null ? Camera.main.transform : null);
+            if (pointer == null) return;
+
+            // Handle Lock-In Trigger Logic from offhand controller
+            // (Using Button/Trigger input check supported safely in MelonLoader)
+            bool triggerClicked = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton0) || Input.GetKeyDown(KeyCode.JoystickButton14);
+
+            if (isLockedIn && currentTargetTransform != null)
+            {
+                // Stick permanently to the locked moving target
+                targetPosition = currentTargetTransform.position;
+                if (targetReticle != null)
+                {
+                    targetReticle.transform.position = targetPosition;
+                    targetReticle.transform.LookAt(Camera.main != null ? Camera.main.transform : pointer);
+                    
+                    // Scale dynamically based on distance from player camera for consistent visual sizing
+                    if (Camera.main != null)
                     {
-                        targetPosition = currentTargetTransform.position;
-                        targetReticle.transform.position = targetPosition;
-                        targetReticle.transform.LookAt(cam.transform);
-                        targetReticle.SetActive(true);
+                        float dist = Vector3.Distance(Camera.main.transform.position, targetPosition);
+                        float scale = Mathf.Clamp(dist * 0.08f, 0.15f, 1.5f);
+                        targetReticle.transform.localScale = new Vector3(scale, scale, scale);
                     }
-                    else
+                    targetReticle.SetActive(true);
+                }
+            }
+            else
+            {
+                // Raycast from offhand pointer to find targets/surfaces
+                if (Physics.Raycast(pointer.position, pointer.forward, out RaycastHit hit, 150f))
+                {
+                    targetPosition = hit.point;
+                    if (targetReticle != null)
                     {
-                        if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
+                        targetReticle.transform.position = targetPosition;
+                        targetReticle.transform.LookAt(Camera.main != null ? Camera.main.transform : pointer);
+
+                        if (Camera.main != null)
                         {
-                            targetPosition = hit.point;
-                            targetReticle.transform.position = targetPosition;
-                            targetReticle.transform.LookAt(cam.transform);
-                            targetReticle.SetActive(true);
+                            float dist = Vector3.Distance(Camera.main.transform.position, targetPosition);
+                            float scale = Mathf.Clamp(dist * 0.08f, 0.15f, 1.5f);
+                            targetReticle.transform.localScale = new Vector3(scale, scale, scale);
                         }
-                        else
+                        targetReticle.SetActive(true);
+
+                        // Click offhand trigger to lock in permanently on object or person
+                        if (triggerClicked)
                         {
-                            targetReticle.SetActive(false);
+                            isLockedIn = true;
+                            currentTargetTransform = hit.transform;
+                            MelonLogger.Msg($"Locked onto target: {hit.transform.name}");
                         }
+                    }
+                }
+                else
+                {
+                    // Default projection if ray hits nothing
+                    targetPosition = pointer.position + (pointer.forward * 5.0f);
+                    if (targetReticle != null)
+                    {
+                        targetReticle.transform.position = targetPosition;
+                        targetReticle.transform.LookAt(pointer);
+                        targetReticle.SetActive(true);
                     }
                 }
             }
-            catch
+
+            // Apply homing trajectory force to any active thrown object toward the locked target
+            if (currentThrownBody != null && isLockedIn)
             {
-                // Suppress update errors silently so game execution never freezes or black screens
+                if (currentTargetTransform != null)
+                {
+                    targetPosition = currentTargetTransform.position;
+                }
+
+                Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
+                float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 20f);
+                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 20f);
             }
         }
 
-        private static void CreateHolographicReticle()
+        private static void CreateBullseyeReticle()
         {
-            try
+            // Create a high-visibility procedural bullseye crosshair object
+            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            targetReticle.name = "HomingBullseyeReticle";
+            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+
+            // Remove collider so it doesn't interfere with physics
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null)
             {
-                targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                if (targetReticle != null)
+                UnityEngine.Object.Destroy(col);
+            }
+
+            // Apply bright glowing cyan shader so it stands out clearly across any map perspective
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader sh = Shader.Find("Unlit/Color");
+                if (sh != null)
                 {
-                    targetReticle.name = "HolographicCrosshair";
-                    targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-
-                    Collider col = targetReticle.GetComponent<Collider>();
-                    if (col != null)
-                    {
-                        UnityEngine.Object.Destroy(col);
-                    }
-
-                    Renderer renderer = targetReticle.GetComponent<Renderer>();
-                    if (renderer != null)
-                    {
-                        Shader sh = Shader.Find("Unlit/Color");
-                        if (sh != null)
-                        {
-                            renderer.material.shader = sh;
-                            renderer.material.color = Color.cyan;
-                        }
-                    }
-                    targetReticle.SetActive(false);
+                    renderer.material.shader = sh;
+                    renderer.material.color = new Color(0f, 1f, 1f, 1f); // Vibrant cyan
                 }
             }
-            catch (System.Exception ex)
-            {
-                MelonLogger.Error($"Failed to create reticle: {ex.Message}");
-            }
+
+            targetReticle.SetActive(false);
+            MelonLogger.Msg("Bullseye crosshair reticle generated successfully.");
         }
     }
 }
