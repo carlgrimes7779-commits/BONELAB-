@@ -82,7 +82,49 @@ namespace HomingThrowMod
                         {
                             isLockedIn = true;
                             currentTargetTransform = hit.transform;
-                            MelonLogger.Msg(string.Format("Locked onto moving target: {0}", hit.transform.name));
+                            MelonLogger.Msg($"Locked onto moving target: {hit.transform.name}");
                         }
                     }
-                    else if (!isLockedIn && targetRet
+                    else if (!isLockedIn && targetReticle != null)
+                    {
+                        targetReticle.SetActive(false);
+                    }
+                }
+            }
+
+            if (currentThrownBody != null && isLockedIn)
+            {
+                if (currentTargetTransform != null)
+                {
+                    targetPosition = currentTargetTransform.position;
+                }
+
+                Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
+                float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 15f);
+                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 15f);
+            }
+        }
+
+        private static void CreateTargetReticle()
+        {
+            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            targetReticle.name = "HomingCrosshairReticle";
+            targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null)
+            {
+                Object.Destroy(col);
+            }
+
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.material.shader = Shader.Find("Unlit/Color");
+                renderer.material.color = new Color(0f, 1f, 1f, 1f);
+            }
+
+            targetReticle.SetActive(false);
+        }
+    }
+}
