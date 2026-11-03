@@ -16,11 +16,11 @@ namespace HomingThrowMod
         {
             MelonLogger.Msg("Homing throw mod initializing menu...");
 
-            // Create a sub-category in the main BoneMenu
-            Page modPage = Page.Create("Homing Throw Quest");
+            // Create main page under BoneMenu Root
+            Page category = Page.Category("Homing Throw Quest", Color.yellow);
 
-            // Add a toggle for your lock-in / homing feature
-            modPage.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
+            // Add enable/disable toggle
+            category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
             {
                 isHomingEnabled = value;
                 MelonLogger.Msg($"Homing enabled: {isHomingEnabled}");
