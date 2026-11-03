@@ -63,17 +63,11 @@ namespace HomingThrowMod
                     ResetHomingState();
                     MelonLogger.Msg("Lock-in deleted via offhand trigger.");
                 }
-                else 
+                else if (hitSomething && hit.transform != null)
                 {
-                    if (hitSomething)
-                    {
-                        if (hit.transform != null)
-                        {
-                            isLockedIn = true;
-                            currentTargetTransform = hit.transform;
-                            MelonLogger.Msg("Locked onto target: " + hit.transform.name);
-                        }
-                    }
+                    isLockedIn = true;
+                    currentTargetTransform = hit.transform;
+                    MelonLogger.Msg("Locked onto target: " + hit.transform.name);
                 }
             }
 
@@ -152,4 +146,68 @@ namespace HomingThrowMod
                         return;
                     }
 
-                    if (currentTargetTransform !=
+                    if (currentTargetTransform != null)
+                    {
+                        targetPosition = currentTargetTransform.position;
+                    }
+
+                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
+                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 20f);
+                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * currentSpeed, Time.deltaTime * 25f);
+                }
+            }
+        }
+
+        private static void ResetHomingState()
+        {
+            isLockedIn = false;
+            currentTargetTransform = null;
+            trackedThrownObject = null;
+            if (targetReticle != null) targetReticle.SetActive(false);
+            if (laserLine != null) laserLine.enabled = false;
+        }
+
+        private static void CreateCrosshairReticle()
+        {
+            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            targetReticle.name = "HomingCrosshair";
+            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null) UnityEngine.Object.Destroy(col);
+
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader sh = Shader.Find("GUI/Text Shader");
+                if (sh == null) sh = Shader.Find("Unlit/Color");
+                
+                if (sh != null)
+                {
+                    renderer.material = new Material(sh);
+                    renderer.material.color = new Color(0f, 1f, 1f, 1f);
+                }
+            }
+            targetReticle.SetActive(false);
+        }
+
+        private static void CreateLaserLine()
+        {
+            laserLineObj = new GameObject("HomingLaserPointer");
+            laserLine = laserLineObj.AddComponent<LineRenderer>();
+            laserLine.startWidth = 0.015f;
+            laserLine.endWidth = 0.015f;
+            laserLine.positionCount = 2;
+
+            Shader sh = Shader.Find("GUI/Text Shader");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
+
+            if (sh != null)
+            {
+                laserLine.material = new Material(sh);
+                laserLine.material.color = new Color(0f, 1f, 1f, 1f);
+            }
+            laserLine.enabled = false;
+        }
+    }
+}
