@@ -56,21 +56,19 @@ namespace HomingThrowMod
             {
                 Transform pointerTransform = cam.transform;
 
-                // Check if user is pointing at something via raycast
-                if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
+                if (isLockedIn && currentTargetTransform != null)
                 {
-                    // If locked in, track moving targets smoothly without freezing the game
-                    if (isLockedIn && currentTargetTransform != null)
+                    targetPosition = currentTargetTransform.position;
+                    if (targetReticle != null)
                     {
-                        targetPosition = currentTargetTransform.position;
-                        if (targetReticle != null)
-                        {
-                            targetReticle.transform.position = targetPosition;
-                            targetReticle.transform.LookAt(cam.transform);
-                            targetReticle.SetActive(true);
-                        }
+                        targetReticle.transform.position = targetPosition;
+                        targetReticle.transform.LookAt(cam.transform);
+                        targetReticle.SetActive(true);
                     }
-                    else
+                }
+                else
+                {
+                    if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                     {
                         targetPosition = hit.point;
                         if (targetReticle != null)
@@ -80,8 +78,6 @@ namespace HomingThrowMod
                             targetReticle.SetActive(true);
                         }
 
-                        // Offhand trigger press activation simulation (using Menu button or alternate input if controller mapping is custom)
-                        // This allows you to press your offhand trigger/button to lock onto moving objects or people permanently
                         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton3))
                         {
                             isLockedIn = true;
@@ -89,38 +85,4 @@ namespace HomingThrowMod
                             MelonLogger.Msg(string.Format("Locked onto moving target: {0}", hit.transform.name));
                         }
                     }
-                }
-                else if (!isLockedIn && targetReticle != null)
-                {
-                    targetReticle.SetActive(false);
-                }
-            }
-
-            // Smooth homing physics toward locked moving target
-            if (currentThrownBody != null && isLockedIn)
-            {
-                if (currentTargetTransform != null)
-                {
-                    targetPosition = currentTargetTransform.position;
-                }
-
-                Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
-                float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 15f);
-                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 15f);
-            }
-        }
-
-        private static void CreateTargetReticle()
-        {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingCrosshairReticle";
-            targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null)
-            {
-                GameObject.Destroy(col);
-            }
-
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            
+                    else if (!isLockedIn && targetRet
