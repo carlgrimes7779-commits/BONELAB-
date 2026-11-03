@@ -141,7 +141,6 @@ namespace HomingThrowMod
                         Rigidbody rb = allBodies[i];
                         if (rb != null && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            // Triggered whenever an item starts moving fast near your hands, regardless of throw direction
                             bool originatesNearPlayer = Vector3.Distance(rb.position, cam.transform.position) < 2.2f;
                             bool isMovingFast = rb.velocity.magnitude > 4.0f;
 
@@ -178,7 +177,6 @@ namespace HomingThrowMod
                     Vector3 toTarget = targetPosition - trackedThrownObject.position;
                     float distanceToTarget = toTarget.magnitude;
 
-                    // Release homing control right before impact for solid hit registration
                     if (distanceToTarget < 0.75f)
                     {
                         trackedThrownObject = null;
@@ -188,4 +186,85 @@ namespace HomingThrowMod
                     float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 30f);
                     Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
 
-                    // High interpolation weight forces the weapon to arc around instantly
+                    trackedThrownObject.velocity = Vector3.Lerp(trackedThrownObject.velocity, desiredVelocity, Time.deltaTime * 24f);
+
+                    if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
+                    {
+                        trackedThrownObject.rotation = Quaternion.Slerp(trackedThrownObject.rotation, Quaternion.LookRotation(trackedThrownObject.velocity), Time.deltaTime * 15f);
+                    }
+                }
+            }
+        }
+
+        private static void LockTargetFromPointer()
+        {
+            Camera cam = Camera.main;
+            if (cam == null) return;
+
+            int layerMask = ~18;
+            RaycastHit hit;
+            if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask))
+            {
+                if (hit.transform != null)
+                {
+                    isLockedIn = true;
+                    currentTargetTransform = hit.transform;
+                    MelonLogger.Msg("Forced lock onto target: " + hit.transform.name);
+                }
+            }
+        } // <--- Properly closed brace here
+
+        private static void ResetHomingState()
+        {
+            isLockedIn = false;
+            currentTargetTransform = null;
+            hoveredTransform = null;
+            trackedThrownObject = null;
+            if (targetReticle != null) targetReticle.SetActive(false);
+            if (laserLine != null) laserLine.enabled = false;
+        }
+
+        private static void CreateCrosshairReticle()
+        {
+            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            targetReticle.name = "HomingCrosshair";
+            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null) UnityEngine.Object.Destroy(col);
+
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader sh = Shader.Find("GUI/Text Shader");
+                if (sh == null) sh = Shader.Find("Unlit/Color");
+                
+                if (sh != null)
+                {
+                    renderer.material = new Material(sh);
+                    renderer.material.color = new Color(0f, 1f, 1f, 1f);
+                }
+            }
+            targetReticle.SetActive(false);
+        }
+
+        private static void CreateLaserLine()
+        {
+            laserLineObj = new GameObject("HomingLaserPointer");
+            laserLine = laserLineObj.AddComponent<LineRenderer>();
+            laserLine.startWidth = 0.015f;
+            laserLine.endWidth = 0.015f;
+            laserLine.positionCount = 2;
+
+            Shader sh = Shader.Find("GUI/Text Shader");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
+
+            if (sh != null)
+            {
+                laserLine.material = new Material(sh);
+                laserLine.material.color = new Color(0f, 1f, 1f, 1f);
+            }
+            laserLine.enabled = false;
+        }
+    }
+}
