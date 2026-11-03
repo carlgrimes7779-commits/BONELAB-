@@ -19,6 +19,7 @@ namespace HomingThrowMod
         private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
         private static Rigidbody? trackedThrownObject;
+        private static float throwStartTime = 0f;
 
         public override void OnInitializeMelon()
         {
@@ -29,13 +30,10 @@ namespace HomingThrowMod
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
             {
                 isHomingEnabled = value;
-                if (!isHomingEnabled)
-                {
-                    ResetHomingState();
-                }
+                if (!isHomingEnabled) ResetHomingState();
             });
 
-            category.CreateFunction("🎯 Lock Target (Right Hand Aim)", Color.green, () => 
+            category.CreateFunction("🎯 Lock Target", Color.green, () => 
             {
                 Camera cam = Camera.main;
                 if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
@@ -46,7 +44,7 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateFunction("❌ Delete / Reset Lock (Offhand Action)", Color.red, () => 
+            category.CreateFunction("❌ Reset Lock", Color.red, () => 
             {
                 ResetHomingState();
                 MelonLogger.Msg("Lock-In state reset.");
@@ -63,7 +61,9 @@ namespace HomingThrowMod
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            Transform pointer = cam.transform;
+            // Offhand origin and aim vector based on camera/controller relative placement
+            Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
+            Vector3 aimDirection = cam.transform.forward;
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -72,21 +72,21 @@ namespace HomingThrowMod
                 {
                     targetReticle.transform.position = targetPosition;
                     targetReticle.transform.LookAt(cam.transform);
-                    targetReticle.transform.localScale = new Vector3(0.15f, 0.15f, 0.15f);
+                    targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
                     targetReticle.SetActive(true);
                 }
                 if (laserLine != null) laserLine.enabled = false;
             }
             else
             {
-                if (Physics.Raycast(pointer.position, pointer.forward, out RaycastHit hit, 200f))
+                if (Physics.Raycast(offhandOrigin, aimDirection, out RaycastHit hit, 200f))
                 {
                     targetPosition = hit.point;
 
                     if (laserLine != null)
                     {
                         laserLine.enabled = true;
-                        laserLine.SetPosition(0, pointer.position);
+                        laserLine.SetPosition(0, offhandOrigin);
                         laserLine.SetPosition(1, targetPosition);
                     }
 
@@ -95,7 +95,7 @@ namespace HomingThrowMod
                         targetReticle.transform.position = targetPosition;
                         targetReticle.transform.LookAt(cam.transform);
 
-                        float dist = Vector3.Distance(pointer.position, targetPosition);
+                        float dist = Vector3.Distance(offhandOrigin, targetPosition);
                         float scale = Mathf.Clamp(dist * 0.05f, 0.2f, 1.5f);
                         targetReticle.transform.localScale = new Vector3(scale, scale, scale);
                         targetReticle.SetActive(true);
@@ -108,6 +108,7 @@ namespace HomingThrowMod
                 }
             }
 
+            // Blunt/Bladed weapon homing tracking
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -116,7 +117,7 @@ namespace HomingThrowMod
                     for (int i = 0; i < allBodies.Length; i++)
                     {
                         Rigidbody rb = allBodies[i];
-                        if (rb != null && rb.velocity.magnitude > 3f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
+                        if (rb != null && rb.velocity.magnitude > 4f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
                         {
                             string objName = rb.gameObject.name.ToLower();
                             bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
@@ -126,7 +127,8 @@ namespace HomingThrowMod
                             if (isBluntOrBladed)
                             {
                                 trackedThrownObject = rb;
-                                MelonLogger.Msg("Tracking blunt/bladed weapon: " + rb.gameObject.name);
+                                throwStartTime = Time.time;
+                                MelonLogger.Msg("Tracking weapon: " + rb.gameObject.name);
                                 break;
                             }
                         }
@@ -135,64 +137,21 @@ namespace HomingThrowMod
 
                 if (trackedThrownObject != null)
                 {
+                    if (Time.time - throwStartTime > 4f)
+                    {
+                        trackedThrownObject = null;
+                        return;
+                    }
+
                     if (currentTargetTransform != null)
                     {
                         targetPosition = currentTargetTransform.position;
                     }
 
                     Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
-                    float boostedSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude * 1.5f, 25f);
-                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * boostedSpeed, Time.deltaTime * 20f);
+                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 20f);
+                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * currentSpeed, Time.deltaTime * 25f);
                 }
             }
         }
 
-        private static void ResetHomingState()
-        {
-            isLockedIn = false;
-            currentTargetTransform = null;
-            trackedThrownObject = null;
-            if (targetReticle != null) targetReticle.SetActive(false);
-            if (laserLine != null) laserLine.enabled = false;
-        }
-
-        private static void CreateCrosshairReticle()
-        {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingCrosshair";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null) UnityEngine.Object.Destroy(col);
-
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Shader sh = Shader.Find("Unlit/Color");
-                if (sh != null)
-                {
-                    renderer.material.shader = sh;
-                    renderer.material.color = Color.cyan;
-                }
-            }
-            targetReticle.SetActive(false);
-        }
-
-        private static void CreateLaserLine()
-        {
-            laserLineObj = new GameObject("HomingLaserPointer");
-            laserLine = laserLineObj.AddComponent<LineRenderer>();
-            laserLine.startWidth = 0.02f;
-            laserLine.endWidth = 0.02f;
-            laserLine.positionCount = 2;
-
-            Shader sh = Shader.Find("Unlit/Color");
-            if (sh != null)
-            {
-                laserLine.material = new Material(sh);
-                laserLine.material.color = Color.cyan;
-            }
-            laserLine.enabled = false;
-        }
-    }
-}
