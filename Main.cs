@@ -13,12 +13,12 @@ namespace HomingThrowMod
         public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
-        private static GameObject? targetReticle;
-        private static GameObject? laserLineObj;
-        private static LineRenderer? laserLine;
-        private static Transform? currentTargetTransform;
+        private static GameObject targetReticle;
+        private static GameObject laserLineObj;
+        private static LineRenderer laserLine;
+        private static Transform currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody? trackedThrownObject;
+        private static Rigidbody trackedThrownObject;
 
         public override void OnInitializeMelon()
         {
@@ -112,9 +112,87 @@ namespace HomingThrowMod
             {
                 if (trackedThrownObject == null)
                 {
-                    Rigidbody[] allBodies = GameObject.FindObjectsOfType<Rigidbody>();
-                    foreach (Rigidbody rb in allBodies)
+                    Rigidbody[] allBodies = Object.FindObjectsOfType<Rigidbody>();
+                    for (int i = 0; i < allBodies.Length; i++)
                     {
+                        Rigidbody rb = allBodies[i];
                         if (rb != null && rb.velocity.magnitude > 3f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            string
+                            string objName = rb.gameObject.name.ToLower();
+                            bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
+                                                 objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || 
+                                                 objName.Contains("prop") || rb.mass < 15f;
+
+                            if (isBluntOrBladed)
+                            {
+                                trackedThrownObject = rb;
+                                MelonLogger.Msg("Tracking blunt/bladed weapon: " + rb.gameObject.name);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (trackedThrownObject != null)
+                {
+                    if (currentTargetTransform != null)
+                    {
+                        targetPosition = currentTargetTransform.position;
+                    }
+
+                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
+                    float boostedSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude * 1.5f, 25f);
+                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * boostedSpeed, Time.deltaTime * 20f);
+                }
+            }
+        }
+
+        private static void ResetHomingState()
+        {
+            isLockedIn = false;
+            currentTargetTransform = null;
+            trackedThrownObject = null;
+            if (targetReticle != null) targetReticle.SetActive(false);
+            if (laserLine != null) laserLine.enabled = false;
+        }
+
+        private static void CreateCrosshairReticle()
+        {
+            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            targetReticle.name = "HomingCrosshair";
+            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader sh = Shader.Find("Unlit/Color");
+                if (sh != null)
+                {
+                    renderer.material.shader = sh;
+                    renderer.material.color = Color.cyan;
+                }
+            }
+            targetReticle.SetActive(false);
+        }
+
+        private static void CreateLaserLine()
+        {
+            laserLineObj = new GameObject("HomingLaserPointer");
+            laserLine = laserLineObj.AddComponent<LineRenderer>();
+            laserLine.startWidth = 0.02f;
+            laserLine.endWidth = 0.02f;
+            laserLine.positionCount = 2;
+
+            Shader sh = Shader.Find("Unlit/Color");
+            if (sh != null)
+            {
+                laserLine.material = new Material(sh);
+                laserLine.material.color = Color.cyan;
+            }
+            laserLine.enabled = false;
+        }
+    }
+}
