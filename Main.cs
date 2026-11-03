@@ -1,31 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+using MelonLoader;
+using BoneLib;
+using UnityEngine;
 
-  <ItemGroup>
-    <Reference Include="MelonLoader">
-      <HintPath>Refs\MelonLoader.dll</HintPath>
-    </Reference>
-    <Reference Include="BoneLib">
-      <HintPath>Refs\BoneLib.dll</HintPath>
-    </Reference>
-    <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>Refs\Il2CppInterop.Runtime.dll</HintPath>
-    </Reference>
-    <Reference Include="Il2Cppmscorlib">
-      <HintPath>Refs\Il2Cppmscorlib.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>Refs\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Refs\UnityEngine.CoreModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>Refs\UnityEngine.PhysicsModule.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-</Project>
+[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.0.0", "Author")]
+[assembly: MelonGame("Stress Level Zero", "BONELAB")]
+
+namespace HomingThrowMod
+{
+    public class HomingThrowMod : MelonMod
+    {
+        public override void OnInitializeMilestone()
+        {
+            MelonLogger.Msg("Homing throw mod initialized!");
+        }
+    }
+}
