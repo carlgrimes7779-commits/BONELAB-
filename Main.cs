@@ -13,12 +13,12 @@ namespace HomingThrowMod
         public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
-        private static GameObject targetReticle;
-        private static GameObject laserLineObj;
-        private static LineRenderer laserLine;
-        private static Transform currentTargetTransform;
+        private static GameObject? targetReticle;
+        private static GameObject? laserLineObj;
+        private static LineRenderer? laserLine;
+        private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody trackedThrownObject;
+        private static Rigidbody? trackedThrownObject;
 
         public override void OnInitializeMelon()
         {
@@ -112,7 +112,7 @@ namespace HomingThrowMod
             {
                 if (trackedThrownObject == null)
                 {
-                    Rigidbody[] allBodies = Object.FindObjectsOfType<Rigidbody>();
+                    Rigidbody[] allBodies = UnityEngine.Object.FindObjectsOfType<Rigidbody>();
                     for (int i = 0; i < allBodies.Length; i++)
                     {
                         Rigidbody rb = allBodies[i];
@@ -163,7 +163,7 @@ namespace HomingThrowMod
             targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
 
             Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            if (col != null) UnityEngine.Object.Destroy(col);
 
             Renderer renderer = targetReticle.GetComponent<Renderer>();
             if (renderer != null)
