@@ -34,10 +34,30 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateFunction("Reset Lock-In Target", Color.red, () => 
+            category.CreateFunction("🔒 Lock Target / Toggle Lock-In", Color.green, () => 
+            {
+                Camera cam = Camera.main;
+                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 100f))
+                {
+                    isLockedIn = !isLockedIn;
+                    if (isLockedIn)
+                    {
+                        currentTargetTransform = hit.transform;
+                        MelonLogger.Msg(string.Format("Target Locked onto: {0}", hit.transform.name));
+                    }
+                    else
+                    {
+                        currentTargetTransform = null;
+                        MelonLogger.Msg("Target Unlocked.");
+                    }
+                }
+            });
+
+            category.CreateFunction("❌ Reset Lock-In", Color.red, () => 
             {
                 isLockedIn = false;
                 currentTargetTransform = null;
+                MelonLogger.Msg("Lock-In Reset.");
             });
         }
 
@@ -74,27 +94,11 @@ namespace HomingThrowMod
                             targetReticle.transform.position = targetPosition;
                             targetReticle.SetActive(true);
                         }
-
-                        // Lock target when clicking mouse or primary button input
-                        if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton0))
-                        {
-                            isLockedIn = true;
-                            currentTargetTransform = hit.transform;
-                            MelonLogger.Msg(string.Format("Target Locked onto: {0}", hit.transform.name));
-                        }
                     }
                     else if (!isLockedIn && targetReticle != null)
                     {
                         targetReticle.SetActive(false);
                     }
-                }
-
-                // Unlock target on secondary button
-                if (isLockedIn && (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton1)))
-                {
-                    isLockedIn = false;
-                    currentTargetTransform = null;
-                    MelonLogger.Msg("Target Unlocked.");
                 }
             }
 
