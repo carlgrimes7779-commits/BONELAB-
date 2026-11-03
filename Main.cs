@@ -36,4 +36,21 @@ namespace HomingThrowMod
             category.CreateFunction("🎯 Lock Target", Color.green, () => 
             {
                 Camera cam = Camera.main;
-                if (cam != null && Physics.Raycast
+                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
+                {
+                    isLockedIn = true;
+                    currentTargetTransform = hit.transform;
+                    MelonLogger.Msg("Locked target: " + hit.transform.name);
+                }
+            });
+
+            category.CreateFunction("❌ Reset Lock", Color.red, () => 
+            {
+                ResetHomingState();
+                MelonLogger.Msg("Lock-In state reset.");
+            });
+        }
+
+        public override void OnUpdate()
+        {
+            if (!isHoming
