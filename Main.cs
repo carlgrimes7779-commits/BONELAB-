@@ -37,7 +37,7 @@ namespace HomingThrowMod
             category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
             {
                 isLockedIn = value;
-                MelonLogger.Msg($"Lock-In Mode set to: {isLockedIn}");
+                MelonLogger.Msg("Lock-In Mode toggled.");
                 if (!isLockedIn)
                 {
                     currentTargetTransform = null;
@@ -51,7 +51,7 @@ namespace HomingThrowMod
                 {
                     isLockedIn = true;
                     currentTargetTransform = hit.transform;
-                    MelonLogger.Msg($"[HomingMod] Permanently locked onto: {hit.transform.name}");
+                    MelonLogger.Msg("Target locked successfully.");
                 }
             });
 
@@ -75,7 +75,6 @@ namespace HomingThrowMod
             Camera cam = Camera.main;
             if (cam != null)
             {
-                // Holographic HUD positioning: projected right along your view/offhand aim vector
                 Transform pointerTransform = cam.transform;
 
                 if (isLockedIn && currentTargetTransform != null)
@@ -90,7 +89,6 @@ namespace HomingThrowMod
                 }
                 else
                 {
-                    // Raycast out to position the holographic crosshair on whatever you point at
                     if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                     {
                         targetPosition = hit.point;
@@ -103,7 +101,6 @@ namespace HomingThrowMod
                     }
                     else
                     {
-                        // Fallback: float the holographic reticle directly in front of your view if no surface is hit
                         targetPosition = pointerTransform.position + (pointerTransform.forward * 3.0f);
                         if (targetReticle != null && !isLockedIn)
                         {
@@ -115,7 +112,6 @@ namespace HomingThrowMod
                 }
             }
 
-            // Apply homing trajectory force to thrown objects so they always home into the crosshair target
             if (currentThrownBody != null && isLockedIn)
             {
                 if (currentTargetTransform != null)
@@ -131,21 +127,25 @@ namespace HomingThrowMod
 
         private static void CreateHolographicReticle()
         {
-            // Create a Quad to display the holographic crosshair
             targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
             targetReticle.name = "HolographicCrosshair";
             targetReticle.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
 
-            // Strip physics collider so it never blocks physics or grabs
             Collider col = targetReticle.GetComponent<Collider>();
             if (col != null)
             {
                 UnityEngine.Object.Destroy(col);
             }
 
-            // Apply an unlit glowing bright cyan material that renders cleanly like a hologram
             Renderer renderer = targetReticle.GetComponent<Renderer>();
             if (renderer != null)
             {
                 renderer.material.shader = Shader.Find("Unlit/Color");
-                renderer.material.color = new Color(0f, 1
+                renderer.material.color = new Color(0f, 1f, 1f, 1f);
+            }
+
+            targetReticle.SetActive(false);
+            MelonLogger.Msg("Holographic crosshair created.");
+        }
+    }
+}
