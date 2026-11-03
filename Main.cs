@@ -78,4 +78,48 @@ namespace HomingThrowMod
                     targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
                     targetReticle.SetActive(true);
                 }
-                if (
+                if (laserLine != null) laserLine.enabled = false;
+            }
+            else
+            {
+                if (Physics.Raycast(offhandOrigin, aimDirection, out RaycastHit hit, 200f))
+                {
+                    targetPosition = hit.point;
+
+                    if (laserLine != null)
+                    {
+                        laserLine.enabled = true;
+                        laserLine.SetPosition(0, offhandOrigin);
+                        laserLine.SetPosition(1, targetPosition);
+                    }
+
+                    if (targetReticle != null)
+                    {
+                        targetReticle.transform.position = targetPosition;
+                        targetReticle.transform.LookAt(cam.transform);
+
+                        float dist = Vector3.Distance(offhandOrigin, targetPosition);
+                        float scale = Mathf.Clamp(dist * 0.05f, 0.2f, 1.5f);
+                        targetReticle.transform.localScale = new Vector3(scale, scale, scale);
+                        targetReticle.SetActive(true);
+                    }
+                }
+                else
+                {
+                    if (laserLine != null) laserLine.enabled = false;
+                    if (targetReticle != null) targetReticle.SetActive(false);
+                }
+            }
+
+            if (isLockedIn && targetPosition != Vector3.zero)
+            {
+                if (trackedThrownObject == null)
+                {
+                    Rigidbody[] allBodies = UnityEngine.Object.FindObjectsOfType<Rigidbody>();
+                    for (int i = 0; i < allBodies.Length; i++)
+                    {
+                        Rigidbody rb = allBodies[i];
+                        if (rb != null && rb.velocity.magnitude > 4f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
+                        {
+                            string objName = rb.gameObject.name.ToLower();
+                            bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("
