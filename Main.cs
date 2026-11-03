@@ -9,7 +9,7 @@ namespace HomingThrowMod
 {
     public class HomingThrowMod : MelonMod
     {
-        public override void OnInitializeMilestone()
+        public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Homing throw mod initialized!");
         }
