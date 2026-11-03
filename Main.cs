@@ -21,8 +21,9 @@ namespace HomingThrowMod
         private static Rigidbody? trackedThrownObject;
         private static float throwStartTime = 0f;
 
+        // Clean timer for double-tap detection using Unity real-time clock
         private static float lastClickTime = 0f;
-        private static bool wasStickPressedLastFrame = false;
+        private static bool isStickTriggered = false;
 
         public override void OnInitializeMelon()
         {
@@ -64,7 +65,8 @@ namespace HomingThrowMod
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
 
-            CheckControllerInput(cam, hitSomething, hit);
+            // Safe cross-platform joystick check for Quest runtime
+            CheckJoystickDoubleTap(hitSomething, hit);
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -178,32 +180,34 @@ namespace HomingThrowMod
             }
         }
 
-        private static void CheckControllerInput(Camera cam, bool hitSomething, RaycastHit hit)
+        private static void CheckJoystickDoubleTap(bool hitSomething, RaycastHit hit)
         {
             try
             {
-                if (Player.leftHand != null && Player.leftHand.controller != null)
-                {
-                    bool isPressedThisFrame = Player.leftHand.controller.GetThumbstickTouch() && Player.leftHand.controller.GetThumbstickAxis().magnitude > 0.8f;
+                // Poll standard XR joystick click input safely
+                bool isPressingJoystick = UnityEngine.Input.GetKey(KeyCode.JoystickButton8) || UnityEngine.Input.GetKey(KeyCode.Joystick1Button8);
 
-                    if (isPressedThisFrame && !wasStickPressedLastFrame)
+                if (isPressingJoystick && !isStickTriggered)
+                {
+                    isStickTriggered = true;
+                    if (Time.time - lastClickTime < 0.4f)
                     {
-                        if (Time.time - lastClickTime < 0.4f)
-                        {
-                            ToggleLockState(hitSomething, hit);
-                            lastClickTime = 0f;
-                        }
-                        else
-                        {
-                            lastClickTime = Time.time;
-                        }
+                        ToggleLockState(hitSomething, hit);
+                        lastClickTime = 0f;
                     }
-                    wasStickPressedLastFrame = isPressedThisFrame;
+                    else
+                    {
+                        lastClickTime = Time.time;
+                    }
+                }
+                else if (!isPressingJoystick)
+                {
+                    isStickTriggered = false;
                 }
             }
             catch
             {
-                // Fallback catch
+                // Fallback catch for platform input exceptions
             }
         }
 
@@ -227,7 +231,7 @@ namespace HomingThrowMod
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            int layerMask = ~18;
+            int layerMask = -18;
             RaycastHit hit;
             if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask))
             {
