@@ -21,6 +21,10 @@ namespace HomingThrowMod
         private static Rigidbody trackedThrownObject;
         private static float throwStartTime = 0f;
 
+        // Double-tap timer logic for Left Joystick Click (L3)
+        private static float lastClickTime = 0f;
+        private static bool wasStickPressedLastFrame = false;
+
         public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Homing Throw Mod Initialized.");
@@ -30,11 +34,6 @@ namespace HomingThrowMod
             {
                 isHomingEnabled = value;
                 if (!isHomingEnabled) ResetHomingState();
-            });
-
-            category.CreateFunction("🎯 Lock Target (Aim & Click)", Color.green, () => 
-            {
-                LockTargetFromPointer();
             });
 
             category.CreateFunction("❌ Reset / Clear Lock", Color.red, () => 
@@ -60,6 +59,9 @@ namespace HomingThrowMod
             int layerMask = -18;
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask, QueryTriggerInteraction.Ignore);
+
+            // Handle controller thumbstick double-tap via BoneLib Player API safely
+            CheckStickDoubleTap(cam, hitSomething, hit);
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -104,7 +106,7 @@ namespace HomingThrowMod
                 }
             }
 
-            // Homing execution block with strict hand-throw verification (<2m origin & >6 speed)
+            // Homing execution block
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -115,10 +117,16 @@ namespace HomingThrowMod
                         Rigidbody rb = allBodies[i];
                         if (rb != null && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            // STRICT CHECK: Must be moving fast (>6f) AND originate near the player's hands (<2m) to confirm it was actively thrown
-                            bool isThrownFromHand = rb.velocity.magnitude > 6.0f && Vector3.Distance(rb.position, cam.transform.position) < 2.0f;
+                            Vector3 toPlayer = (cam.transform.position - rb.position).normalized;
+                            
+                            // Check 1: Must originate within 2m of player (in hands)
+                            bool originatesNearPlayer = Vector3.Distance(rb.position, cam.transform.position) < 2.0f;
+                            // Check 2: Must be moving fast (>5m/s)
+                            bool isMovingFast = rb.velocity.magnitude > 5.0f;
+                            // Check 3: MUST NOT be traveling TOWARDS the player (prevents force-grabbing interference)
+                            bool isMovingAwayFromPlayer = Vector3.Dot(rb.velocity.normalized, toPlayer) < 0.2f;
 
-                            if (isThrownFromHand)
+                            if (originatesNearPlayer && isMovingFast && isMovingAwayFromPlayer)
                             {
                                 string objName = rb.gameObject.name.ToLower();
                                 bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
@@ -127,7 +135,7 @@ namespace HomingThrowMod
                                 {
                                     trackedThrownObject = rb;
                                     throwStartTime = Time.time;
-                                    MelonLogger.Msg("Tracking hand-thrown weapon: " + rb.gameObject.name);
+                                    MelonLogger.Msg("Tracking thrown weapon: " + rb.gameObject.name);
                                     break;
                                 }
                             }
@@ -151,7 +159,7 @@ namespace HomingThrowMod
                     Vector3 toTarget = targetPosition - trackedThrownObject.position;
                     float distanceToTarget = toTarget.magnitude;
 
-                    // Release homing control close to the target for clean, hard impacts
+                    // Release homing control close to target for direct physics impact
                     if (distanceToTarget < 0.75f)
                     {
                         trackedThrownObject = null;
@@ -171,74 +179,20 @@ namespace HomingThrowMod
             }
         }
 
-        private static void LockTargetFromPointer()
+        private static void CheckStickDoubleTap(Camera cam, bool hitSomething, RaycastHit hit)
         {
-            Camera cam = Camera.main;
-            if (cam == null) return;
-
-            int layerMask = -18;
-            RaycastHit hit;
-            if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask, QueryTriggerInteraction.Ignore))
+            try
             {
-                if (hit.transform != null)
+                if (Player.leftController != null)
                 {
-                    isLockedIn = true;
-                    currentTargetTransform = hit.transform;
-                    MelonLogger.Msg("Locked onto target: " + hit.transform.name);
-                }
-            }
-        }
+                    bool isPressedThisFrame = Player.leftController.GetThumbstickTouch() && Player.leftController.GetThumbstickAxis().magnitude > 0.8f;
 
-        private static void ResetHomingState()
-        {
-            isLockedIn = false;
-            currentTargetTransform = null;
-            trackedThrownObject = null;
-            if (targetReticle != null) targetReticle.SetActive(false);
-            if (laserLine != null) laserLine.enabled = false;
-        }
-
-        private static void CreateCrosshairReticle()
-        {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingCrosshair";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null) UnityEngine.Object.Destroy(col);
-
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Shader sh = Shader.Find("GUI/Text Shader");
-                if (sh == null) sh = Shader.Find("Unlit/Color");
-                
-                if (sh != null)
-                {
-                    renderer.material = new Material(sh);
-                    renderer.material.color = new Color(0f, 1f, 1f, 1f);
-                }
-            }
-            targetReticle.SetActive(false);
-        }
-
-        private static void CreateLaserLine()
-        {
-            laserLineObj = new GameObject("HomingLaserPointer");
-            laserLine = laserLineObj.AddComponent<LineRenderer>();
-            laserLine.startWidth = 0.015f;
-            laserLine.endWidth = 0.015f;
-            laserLine.positionCount = 2;
-
-            Shader sh = Shader.Find("GUI/Text Shader");
-            if (sh == null) sh = Shader.Find("Unlit/Color");
-
-            if (sh != null)
-            {
-                laserLine.material = new Material(sh);
-                laserLine.material.color = new Color(0f, 1f, 1f, 1f);
-            }
-            laserLine.enabled = false;
-        }
-    }
-}
+                    if (isPressedThisFrame && !wasStickPressedLastFrame)
+                    {
+                        if (Time.time - lastClickTime < 0.4f)
+                        {
+                            // Double tap detected!
+                            if (isLockedIn)
+                            {
+                                ResetHomingState();
+                                MelonLogger.Msg("Lock
