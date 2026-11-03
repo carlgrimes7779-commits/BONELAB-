@@ -16,132 +16,134 @@ namespace HomingThrowMod
         private static GameObject? targetReticle;
         private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody? currentThrownBody;
 
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod Initialized Successfully.");
-
-            Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
-
-            category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
+            try
             {
-                isHomingEnabled = value;
-                if (!isHomingEnabled && targetReticle != null)
+                MelonLogger.Msg("Initializing Homing Throw Mod safely...");
+
+                Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
+
+                category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
                 {
-                    targetReticle.SetActive(false);
+                    isHomingEnabled = value;
+                    if (!isHomingEnabled && targetReticle != null)
+                    {
+                        targetReticle.SetActive(false);
+                        isLockedIn = false;
+                    }
+                });
+
+                category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
+                {
+                    isLockedIn = value;
+                    if (!isLockedIn)
+                    {
+                        currentTargetTransform = null;
+                    }
+                });
+
+                category.CreateFunction("🔒 Lock Target Now", Color.cyan, () => 
+                {
+                    Camera cam = Camera.main;
+                    if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 100f))
+                    {
+                        isLockedIn = true;
+                        currentTargetTransform = hit.transform;
+                    }
+                });
+
+                category.CreateFunction("❌ Reset Target", Color.red, () => 
+                {
                     isLockedIn = false;
-                }
-            });
-
-            category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
-            {
-                isLockedIn = value;
-                if (!isLockedIn)
-                {
                     currentTargetTransform = null;
-                }
-            });
-
-            category.CreateFunction("🔒 Lock Target Now", Color.cyan, () => 
+                });
+            }
+            catch (System.Exception ex)
             {
-                Camera cam = Camera.main;
-                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 100f))
-                {
-                    isLockedIn = true;
-                    currentTargetTransform = hit.transform;
-                }
-            });
-
-            category.CreateFunction("❌ Reset Target", Color.red, () => 
-            {
-                isLockedIn = false;
-                currentTargetTransform = null;
-            });
+                MelonLogger.Error($"Error during initialization: {ex.Message}");
+            }
         }
 
         public override void OnUpdate()
         {
-            if (!isHomingEnabled) return;
-
-            if (targetReticle == null)
+            try
             {
-                CreateHolographicReticle();
-            }
+                if (!isHomingEnabled) return;
 
-            Camera cam = Camera.main;
-            if (cam != null)
-            {
-                Transform pointerTransform = cam.transform;
-
-                if (isLockedIn && currentTargetTransform != null)
+                if (targetReticle == null)
                 {
-                    targetPosition = currentTargetTransform.position;
-                    if (targetReticle != null)
+                    CreateHolographicReticle();
+                }
+
+                Camera cam = Camera.main;
+                if (cam != null && targetReticle != null)
+                {
+                    Transform pointerTransform = cam.transform;
+
+                    if (isLockedIn && currentTargetTransform != null)
                     {
+                        targetPosition = currentTargetTransform.position;
                         targetReticle.transform.position = targetPosition;
                         targetReticle.transform.LookAt(cam.transform);
                         targetReticle.SetActive(true);
                     }
-                }
-                else
-                {
-                    if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
+                    else
                     {
-                        targetPosition = hit.point;
-                        if (targetReticle != null)
+                        if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                         {
+                            targetPosition = hit.point;
                             targetReticle.transform.position = targetPosition;
                             targetReticle.transform.LookAt(cam.transform);
                             targetReticle.SetActive(true);
                         }
-                    }
-                    else
-                    {
-                        targetPosition = pointerTransform.position + (pointerTransform.forward * 3.0f);
-                        if (targetReticle != null && !isLockedIn)
+                        else
                         {
-                            targetReticle.transform.position = targetPosition;
-                            targetReticle.transform.LookAt(cam.transform);
-                            targetReticle.SetActive(true);
+                            targetReticle.SetActive(false);
                         }
                     }
                 }
             }
-
-            if (currentThrownBody != null && isLockedIn)
+            catch
             {
-                if (currentTargetTransform != null)
-                {
-                    targetPosition = currentTargetTransform.position;
-                }
-
-                Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
-                float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 18f);
-                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 18f);
+                // Suppress update errors silently so game execution never freezes or black screens
             }
         }
 
         private static void CreateHolographicReticle()
         {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HolographicCrosshair";
-            targetReticle.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null)
+            try
             {
-                UnityEngine.Object.Destroy(col);
-            }
+                targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                if (targetReticle != null)
+                {
+                    targetReticle.name = "HolographicCrosshair";
+                    targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
 
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
+                    Collider col = targetReticle.GetComponent<Collider>();
+                    if (col != null)
+                    {
+                        UnityEngine.Object.Destroy(col);
+                    }
+
+                    Renderer renderer = targetReticle.GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        Shader sh = Shader.Find("Unlit/Color");
+                        if (sh != null)
+                        {
+                            renderer.material.shader = sh;
+                            renderer.material.color = Color.cyan;
+                        }
+                    }
+                    targetReticle.SetActive(false);
+                }
+            }
+            catch (System.Exception ex)
             {
-                renderer.material.shader = Shader.Find("Unlit/Color");
-                renderer.material.color = new Color(0f, 1f, 1f, 1f);
+                MelonLogger.Error($"Failed to create reticle: {ex.Message}");
             }
-
-            targetReticle.SetActive(false);
         }
     }
 }
