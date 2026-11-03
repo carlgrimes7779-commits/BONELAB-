@@ -13,12 +13,12 @@ namespace HomingThrowMod
         public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
-        private static GameObject targetReticle;
-        private static GameObject laserLineObj;
-        private static LineRenderer laserLine;
-        private static Transform currentTargetTransform;
+        private static GameObject? targetReticle;
+        private static GameObject? laserLineObj;
+        private static LineRenderer? laserLine;
+        private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody trackedThrownObject;
+        private static Rigidbody? trackedThrownObject;
         private static float throwStartTime = 0f;
 
         private static float lastClickTime = 0f;
@@ -182,9 +182,9 @@ namespace HomingThrowMod
         {
             try
             {
-                if (Player.leftController != null)
+                if (Player.leftHand != null && Player.leftHand.controller != null)
                 {
-                    bool isPressedThisFrame = Player.leftController.GetThumbstickTouch() && Player.leftController.GetThumbstickAxis().magnitude > 0.8f;
+                    bool isPressedThisFrame = Player.leftHand.controller.GetThumbstickTouch() && Player.leftHand.controller.GetThumbstickAxis().magnitude > 0.8f;
 
                     if (isPressedThisFrame && !wasStickPressedLastFrame)
                     {
