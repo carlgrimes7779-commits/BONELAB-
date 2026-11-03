@@ -20,6 +20,7 @@ namespace HomingThrowMod
         private static Vector3 targetPosition;
         private static Rigidbody trackedThrownObject;
         private static float throwStartTime = 0f;
+        private static bool previousTriggerState = false;
 
         public override void OnInitializeMelon()
         {
@@ -30,11 +31,6 @@ namespace HomingThrowMod
             {
                 isHomingEnabled = value;
                 if (!isHomingEnabled) ResetHomingState();
-            });
-
-            category.CreateFunction("🎯 Lock Target", Color.green, () => 
-            {
-                LockTargetFromPointer();
             });
 
             category.CreateFunction("❌ Reset / Delete Lock", Color.red, () => 
@@ -57,9 +53,40 @@ namespace HomingThrowMod
             Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
             Vector3 aimDirection = cam.transform.forward;
 
+            // Safe cross-platform input check for left trigger / action button
+            bool currentTriggerState = false;
+            try 
+            {
+                currentTriggerState = UnityEngine.Input.GetMouseButtonDown(1) || UnityEngine.Input.GetKey(KeyCode.JoystickButton14) || UnityEngine.Input.GetAxis("TriggerLeft") > 0.7f;
+            }
+            catch 
+            {
+                // Fallback if input axis is unavailable in specific runtime contexts
+                currentTriggerState = false;
+            }
+
+            bool triggerPressedDown = currentTriggerState && !previousTriggerState;
+            previousTriggerState = currentTriggerState;
+
             int layerMask = -18;
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask, QueryTriggerInteraction.Ignore);
+
+            // Left trigger press handles lock-on and lock toggling dynamically
+            if (triggerPressedDown)
+            {
+                if (isLockedIn)
+                {
+                    ResetHomingState();
+                    MelonLogger.Msg("Lock-in cleared via left trigger.");
+                }
+                else if (hitSomething && hit.transform != null)
+                {
+                    isLockedIn = true;
+                    currentTargetTransform = hit.transform;
+                    MelonLogger.Msg("Locked onto target via trigger: " + hit.transform.name);
+                }
+            }
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -104,7 +131,7 @@ namespace HomingThrowMod
                 }
             }
 
-            // Homing execution block
+            // Homing execution block with strict hand-throw verification
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -113,18 +140,23 @@ namespace HomingThrowMod
                     for (int i = 0; i < allBodies.Length; i++)
                     {
                         Rigidbody rb = allBodies[i];
-                        // Expanded initial velocity threshold to catch blind/behind-the-back throws instantly
-                        if (rb != null && rb.velocity.magnitude > 2.5f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
+                        if (rb != null && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            string objName = rb.gameObject.name.ToLower();
-                            bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
+                            // STRICT CHECK: Must be moving fast (>6f) AND originate near the player's hands (<2m) to confirm it was actively thrown
+                            bool isThrownFromHand = rb.velocity.magnitude > 6.0f && Vector3.Distance(rb.position, cam.transform.position) < 2.0f;
 
-                            if (isBluntOrBladed)
+                            if (isThrownFromHand)
                             {
-                                trackedThrownObject = rb;
-                                throwStartTime = Time.time;
-                                MelonLogger.Msg("Tracking weapon 360°: " + rb.gameObject.name);
-                                break;
+                                string objName = rb.gameObject.name.ToLower();
+                                bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
+
+                                if (isBluntOrBladed)
+                                {
+                                    trackedThrownObject = rb;
+                                    throwStartTime = Time.time;
+                                    MelonLogger.Msg("Tracking hand-thrown weapon: " + rb.gameObject.name);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -132,7 +164,6 @@ namespace HomingThrowMod
 
                 if (trackedThrownObject != null)
                 {
-                    // Timeout safety if it misses or takes too long (increased to 6 seconds for long curve shots)
                     if (Time.time - throwStartTime > 6f)
                     {
                         trackedThrownObject = null;
@@ -144,47 +175,25 @@ namespace HomingThrowMod
                         targetPosition = currentTargetTransform.position;
                     }
 
-                    // Calculate vector straight to target
                     Vector3 toTarget = targetPosition - trackedThrownObject.position;
                     float distanceToTarget = toTarget.magnitude;
 
-                    // If we are close enough, let physics take over so it impacts solidly instead of orbiting
+                    // Release homing control close to the target for clean, hard impacts
                     if (distanceToTarget < 0.75f)
                     {
                         trackedThrownObject = null;
                         return;
                     }
 
-                    // Aggressive 360-degree curving calculation (forces velocity vector to bend toward target even if thrown backward)
                     float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 25f);
                     Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
 
-                    // Direct interpolation overrides existing velocity to pull it around corners or behind you
                     trackedThrownObject.velocity = Vector3.Lerp(trackedThrownObject.velocity, desiredVelocity, Time.deltaTime * 18f);
 
-                    // Align the physical object's rotation towards the flight path for clean stabs/impacts
                     if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
                     {
                         trackedThrownObject.rotation = Quaternion.Slerp(trackedThrownObject.rotation, Quaternion.LookRotation(trackedThrownObject.velocity), Time.deltaTime * 12f);
                     }
-                }
-            }
-        }
-
-        private static void LockTargetFromPointer()
-        {
-            Camera cam = Camera.main;
-            if (cam == null) return;
-
-            int layerMask = -18;
-            RaycastHit hit;
-            if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask, QueryTriggerInteraction.Ignore))
-            {
-                if (hit.transform != null)
-                {
-                    isLockedIn = true;
-                    currentTargetTransform = hit.transform;
-                    MelonLogger.Msg("Locked onto target: " + hit.transform.name);
                 }
             }
         }
@@ -231,7 +240,7 @@ namespace HomingThrowMod
             laserLine.positionCount = 2;
 
             Shader sh = Shader.Find("GUI/Text Shader");
-            if (sh == null) sh = Shader.Find("Unlit/Null");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
 
             if (sh != null)
             {
