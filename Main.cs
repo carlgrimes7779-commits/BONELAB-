@@ -20,7 +20,6 @@ namespace HomingThrowMod
         private static Vector3 targetPosition;
         private static Rigidbody trackedThrownObject;
         private static float throwStartTime = 0f;
-        private static bool previousTriggerState = false;
 
         public override void OnInitializeMelon()
         {
@@ -31,6 +30,29 @@ namespace HomingThrowMod
             {
                 isHomingEnabled = value;
                 if (!isHomingEnabled) ResetHomingState();
+            });
+
+            category.CreateFunction("🎯 Lock Target (Offhand Action)", Color.green, () => 
+            {
+                Camera cam = Camera.main;
+                if (cam == null) return;
+
+                int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20)); // Ignores triggers/spawn volumes
+                if (Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f, layerMask))
+                {
+                    if (hit.transform != null)
+                    {
+                        isLockedIn = true;
+                        currentTargetTransform = hit.transform;
+                        MelonLogger.Msg("Locked onto target: " + hit.transform.name);
+                    }
+                }
+            });
+
+            category.CreateFunction("❌ Reset / Delete Lock", Color.red, () => 
+            {
+                ResetHomingState();
+                MelonLogger.Msg("Lock-In state reset.");
             });
         }
 
@@ -47,29 +69,9 @@ namespace HomingThrowMod
             Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
             Vector3 aimDirection = cam.transform.forward;
 
-            bool currentTriggerState = Input.GetAxis("TriggerLeft") > 0.7f || Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton1);
-            bool triggerPressedDown = currentTriggerState && !previousTriggerState;
-            previousTriggerState = currentTriggerState;
-
             int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20));
-
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
-
-            if (triggerPressedDown)
-            {
-                if (isLockedIn)
-                {
-                    ResetHomingState();
-                    MelonLogger.Msg("Lock-in deleted via offhand trigger.");
-                }
-                else if (hitSomething && hit.transform != null)
-                {
-                    isLockedIn = true;
-                    currentTargetTransform = hit.transform;
-                    MelonLogger.Msg("Locked onto target: " + hit.transform.name);
-                }
-            }
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -161,53 +163,4 @@ namespace HomingThrowMod
         private static void ResetHomingState()
         {
             isLockedIn = false;
-            currentTargetTransform = null;
-            trackedThrownObject = null;
-            if (targetReticle != null) targetReticle.SetActive(false);
-            if (laserLine != null) laserLine.enabled = false;
-        }
-
-        private static void CreateCrosshairReticle()
-        {
-            targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingCrosshair";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-
-            Collider col = targetReticle.GetComponent<Collider>();
-            if (col != null) UnityEngine.Object.Destroy(col);
-
-            Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Shader sh = Shader.Find("GUI/Text Shader");
-                if (sh == null) sh = Shader.Find("Unlit/Color");
-                
-                if (sh != null)
-                {
-                    renderer.material = new Material(sh);
-                    renderer.material.color = new Color(0f, 1f, 1f, 1f);
-                }
-            }
-            targetReticle.SetActive(false);
-        }
-
-        private static void CreateLaserLine()
-        {
-            laserLineObj = new GameObject("HomingLaserPointer");
-            laserLine = laserLineObj.AddComponent<LineRenderer>();
-            laserLine.startWidth = 0.015f;
-            laserLine.endWidth = 0.015f;
-            laserLine.positionCount = 2;
-
-            Shader sh = Shader.Find("GUI/Text Shader");
-            if (sh == null) sh = Shader.Find("Unlit/Color");
-
-            if (sh != null)
-            {
-                laserLine.material = new Material(sh);
-                laserLine.material.color = new Color(0f, 1f, 1f, 1f);
-            }
-            laserLine.enabled = false;
-        }
-    }
-}
+            currentTargetTransform
