@@ -57,11 +57,12 @@ namespace HomingThrowMod
             Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
             Vector3 aimDirection = cam.transform.forward;
 
-            int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20));
+            // Direct integer bitmask representing ~((1 << 2) | (1 << 4) | (1 << 20)) to prevent compiler bitwise parsing errors
+            int layerMask = -18;
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
 
             if (isLockedIn && currentTargetTransform != null)
             {
                 targetPosition = currentTargetTransform.position;
-                if (targetRet
+                if (targetReticle !=
