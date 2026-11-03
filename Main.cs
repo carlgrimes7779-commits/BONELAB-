@@ -57,7 +57,6 @@ namespace HomingThrowMod
             Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
             Vector3 aimDirection = cam.transform.forward;
 
-            // Ignores layer 2 (Ignore Raycast), layer 4 (Water), and layer 20 (Spawn/Trigger volumes)
             int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20));
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
@@ -65,8 +64,4 @@ namespace HomingThrowMod
             if (isLockedIn && currentTargetTransform != null)
             {
                 targetPosition = currentTargetTransform.position;
-                if (targetReticle != null)
-                {
-                    targetReticle.transform.position = targetPosition;
-                    targetReticle.transform.LookAt(cam.transform);
-                    targetReticle.transform
+                if (targetRet
