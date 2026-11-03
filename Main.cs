@@ -32,21 +32,9 @@ namespace HomingThrowMod
                 if (!isHomingEnabled) ResetHomingState();
             });
 
-            category.CreateFunction("🎯 Lock Target (Offhand Action)", Color.green, () => 
+            category.CreateFunction("🎯 Lock Target", Color.green, () => 
             {
-                Camera cam = Camera.main;
-                if (cam == null) return;
-
-                int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20)); // Ignores triggers/spawn volumes
-                if (Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f, layerMask))
-                {
-                    if (hit.transform != null)
-                    {
-                        isLockedIn = true;
-                        currentTargetTransform = hit.transform;
-                        MelonLogger.Msg("Locked onto target: " + hit.transform.name);
-                    }
-                }
+                LockTargetFromPointer();
             });
 
             category.CreateFunction("❌ Reset / Delete Lock", Color.red, () => 
@@ -69,6 +57,7 @@ namespace HomingThrowMod
             Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
             Vector3 aimDirection = cam.transform.forward;
 
+            // Ignores layer 2 (Ignore Raycast), layer 4 (Water), and layer 20 (Spawn/Trigger volumes)
             int layerMask = ~((1 << 2) | (1 << 4) | (1 << 20));
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
@@ -80,87 +69,4 @@ namespace HomingThrowMod
                 {
                     targetReticle.transform.position = targetPosition;
                     targetReticle.transform.LookAt(cam.transform);
-                    targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
-                    targetReticle.SetActive(true);
-                }
-                if (laserLine != null) laserLine.enabled = false;
-            }
-            else
-            {
-                if (hitSomething)
-                {
-                    targetPosition = hit.point;
-
-                    if (laserLine != null)
-                    {
-                        laserLine.enabled = true;
-                        laserLine.SetPosition(0, offhandOrigin);
-                        laserLine.SetPosition(1, targetPosition);
-                    }
-
-                    if (targetReticle != null)
-                    {
-                        targetReticle.transform.position = targetPosition;
-                        targetReticle.transform.LookAt(cam.transform);
-
-                        float dist = Vector3.Distance(offhandOrigin, targetPosition);
-                        float scale = Mathf.Clamp(dist * 0.05f, 0.2f, 1.5f);
-                        targetReticle.transform.localScale = new Vector3(scale, scale, scale);
-                        targetReticle.SetActive(true);
-                    }
-                }
-                else
-                {
-                    if (laserLine != null) laserLine.enabled = false;
-                    if (targetReticle != null) targetReticle.SetActive(false);
-                }
-            }
-
-            if (isLockedIn && targetPosition != Vector3.zero)
-            {
-                if (trackedThrownObject == null)
-                {
-                    Rigidbody[] allBodies = UnityEngine.Object.FindObjectsOfType<Rigidbody>();
-                    for (int i = 0; i < allBodies.Length; i++)
-                    {
-                        Rigidbody rb = allBodies[i];
-                        if (rb != null && rb.velocity.magnitude > 4f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
-                        {
-                            string objName = rb.gameObject.name.ToLower();
-                            bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
-
-                            if (isBluntOrBladed)
-                            {
-                                trackedThrownObject = rb;
-                                throwStartTime = Time.time;
-                                MelonLogger.Msg("Tracking weapon: " + rb.gameObject.name);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (trackedThrownObject != null)
-                {
-                    if (Time.time - throwStartTime > 4f)
-                    {
-                        trackedThrownObject = null;
-                        return;
-                    }
-
-                    if (currentTargetTransform != null)
-                    {
-                        targetPosition = currentTargetTransform.position;
-                    }
-
-                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
-                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 20f);
-                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * currentSpeed, Time.deltaTime * 25f);
-                }
-            }
-        }
-
-        private static void ResetHomingState()
-        {
-            isLockedIn = false;
-            currentTargetTransform
+                    targetReticle.transform
