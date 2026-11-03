@@ -16,11 +16,11 @@ namespace HomingThrowMod
         private static GameObject? targetReticle;
         private static Transform? currentTargetTransform;
         private static Vector3 targetPosition;
-        private static Rigidbody? currentThrownBody;
+        private static Rigidbody? trackedThrownObject;
 
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod Initialized Successfully.");
+            MelonLogger.Msg("Homing Throw Mod Initialized.");
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
@@ -34,7 +34,7 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
+            category.CreateBool("Lock-In Target", Color.green, isLockedIn, (value) => 
             {
                 isLockedIn = value;
                 if (!isLockedIn)
@@ -43,14 +43,14 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateFunction("🔒 Lock Target Now", Color.cyan, () => 
+            category.CreateFunction("🔒 Quick Lock Target", Color.cyan, () => 
             {
                 Camera cam = Camera.main;
-                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 150f))
+                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
                 {
                     isLockedIn = true;
                     currentTargetTransform = hit.transform;
-                    MelonLogger.Msg($"[HomingMod] Permanently locked target: {hit.transform.name}");
+                    MelonLogger.Msg($"Locked onto target: {hit.transform.name}");
                 }
             });
 
@@ -58,6 +58,8 @@ namespace HomingThrowMod
             {
                 isLockedIn = false;
                 currentTargetTransform = null;
+                trackedThrownObject = null;
+                MelonLogger.Msg("Target reset and unlocked.");
             });
         }
 
@@ -73,76 +75,93 @@ namespace HomingThrowMod
             Camera cam = Camera.main;
             if (cam != null)
             {
-                Transform pointerTransform = cam.transform;
+                Transform pointer = cam.transform;
 
+                // Update target position based on locked object or active raycast
                 if (isLockedIn && currentTargetTransform != null)
                 {
                     targetPosition = currentTargetTransform.position;
-                    if (targetReticle != null)
-                    {
-                        targetReticle.transform.position = targetPosition;
-                        targetReticle.transform.LookAt(cam.transform);
-
-                        // Dynamic scale by camera distance so the reticle stays visible everywhere on the map
-                        float dist = Vector3.Distance(cam.transform.position, targetPosition);
-                        float scale = Mathf.Clamp(dist * 0.08f, 0.2f, 2.0f);
-                        targetReticle.transform.localScale = new Vector3(scale, scale, scale);
-
-                        targetReticle.SetActive(true);
-                    }
                 }
                 else
                 {
-                    if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 150f))
+                    if (Physics.Raycast(pointer.position, pointer.forward, out RaycastHit hit, 200f))
                     {
                         targetPosition = hit.point;
-                        if (targetReticle != null)
-                        {
-                            targetReticle.transform.position = targetPosition;
-                            targetReticle.transform.LookAt(cam.transform);
-
-                            float dist = Vector3.Distance(cam.transform.position, targetPosition);
-                            float scale = Mathf.Clamp(dist * 0.08f, 0.2f, 2.0f);
-                            targetReticle.transform.localScale = new Vector3(scale, scale, scale);
-
-                            targetReticle.SetActive(true);
-                        }
                     }
                     else
                     {
-                        if (targetReticle != null && !isLockedIn)
-                        {
-                            targetReticle.SetActive(false);
-                        }
+                        targetPosition = pointer.position + (pointer.forward * 5.0f);
                     }
+                }
+
+                // Render and scale the bright holographic bullseye reticle so it's visible anywhere on map
+                if (targetReticle != null)
+                {
+                    targetReticle.transform.position = targetPosition;
+                    targetReticle.transform.LookAt(cam.transform);
+
+                    float distanceToCam = Vector3.Distance(cam.transform.position, targetPosition);
+                    float dynamicScale = Mathf.Clamp(distanceToCam * 0.08f, 0.25f, 2.5f);
+                    targetReticle.transform.localScale = new Vector3(dynamicScale, dynamicScale, dynamicScale);
+
+                    targetReticle.SetActive(true);
                 }
             }
 
-            if (currentThrownBody != null && isLockedIn)
+            // Universal Homing Curve Logic: Any thrown object curves aggressively to hit the target
+            if (isLockedIn && targetPosition != Vector3.zero)
             {
-                if (currentTargetTransform != null)
+                // Auto-detect newly thrown objects if we aren't tracking one yet
+                if (trackedThrownObject == null)
                 {
-                    targetPosition = currentTargetTransform.position;
+                    Rigidbody[] allBodies = GameObject.FindObjectsOfType<Rigidbody>();
+                    foreach (Rigidbody rb in allBodies)
+                    {
+                        // Check if object is moving fast enough to be a thrown item and isn't the player/reticle
+                        if (rb != null && rb.velocity.magnitude > 3f && rb.gameObject != targetReticle)
+                        {
+                            trackedThrownObject = rb;
+                            break;
+                        }
+                    }
                 }
 
-                Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
-                float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 20f);
-                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 20f);
+                // Apply aggressive steering force so the object curves directly into the target
+                if (trackedThrownObject != null)
+                {
+                    if (currentTargetTransform != null)
+                    {
+                        targetPosition = currentTargetTransform.position;
+                    }
+
+                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
+                    float speed = Mathf.Max(trackedThrownObject.velocity.magnitude, 22f);
+                    
+                    // Smoothly curve velocity vector directly toward the target destination
+                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * speed, Time.deltaTime * 15f);
+                }
+            }
+            else
+            {
+                trackedThrownObject = null;
             }
         }
 
         private static void CreateBullseyeReticle()
         {
+            // Create a Quad to display a clean glowing cyan bullseye crosshair overlay
             targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            targetReticle.name = "HomingBullseyeReticle";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            targetReticle.name = "HolographicBullseyeCrosshair";
+            targetReticle.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
 
+            // Strip collider so it has zero physics impact
             Collider col = targetReticle.GetComponent<Collider>();
             if (col != null)
             {
                 UnityEngine.Object.Destroy(col);
             }
 
+            // Apply glowing unlit cyan material visible across all map perspectives
             Renderer renderer = targetReticle.GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -150,12 +169,12 @@ namespace HomingThrowMod
                 if (sh != null)
                 {
                     renderer.material.shader = sh;
-                    renderer.material.color = new Color(0f, 1f, 1f, 1f); // Glowing bright cyan
+                    renderer.material.color = new Color(0f, 1f, 1f, 1f); // Vibrant visible cyan
                 }
             }
 
             targetReticle.SetActive(false);
-            MelonLogger.Msg("Bullseye reticle created successfully.");
+            MelonLogger.Msg("Bullseye reticle object successfully built.");
         }
     }
 }
