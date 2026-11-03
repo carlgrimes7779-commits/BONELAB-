@@ -119,80 +119,9 @@ namespace HomingThrowMod
                         {
                             Vector3 toPlayer = (cam.transform.position - rb.position).normalized;
                             
-                            // Check 1: Must originate within 2m of player (in hands)
                             bool originatesNearPlayer = Vector3.Distance(rb.position, cam.transform.position) < 2.0f;
-                            // Check 2: Must be moving fast (>5m/s)
                             bool isMovingFast = rb.velocity.magnitude > 5.0f;
-                            // Check 3: MUST NOT be traveling TOWARDS the player (prevents force-grabbing interference)
                             bool isMovingAwayFromPlayer = Vector3.Dot(rb.velocity.normalized, toPlayer) < 0.2f;
 
                             if (originatesNearPlayer && isMovingFast && isMovingAwayFromPlayer)
-                            {
-                                string objName = rb.gameObject.name.ToLower();
-                                bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
-
-                                if (isBluntOrBladed)
-                                {
-                                    trackedThrownObject = rb;
-                                    throwStartTime = Time.time;
-                                    MelonLogger.Msg("Tracking thrown weapon: " + rb.gameObject.name);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (trackedThrownObject != null)
-                {
-                    if (Time.time - throwStartTime > 6f)
-                    {
-                        trackedThrownObject = null;
-                        return;
-                    }
-
-                    if (currentTargetTransform != null)
-                    {
-                        targetPosition = currentTargetTransform.position;
-                    }
-
-                    Vector3 toTarget = targetPosition - trackedThrownObject.position;
-                    float distanceToTarget = toTarget.magnitude;
-
-                    // Release homing control close to target for direct physics impact
-                    if (distanceToTarget < 0.75f)
-                    {
-                        trackedThrownObject = null;
-                        return;
-                    }
-
-                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 25f);
-                    Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
-
-                    trackedThrownObject.velocity = Vector3.Lerp(trackedThrownObject.velocity, desiredVelocity, Time.deltaTime * 18f);
-
-                    if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
-                    {
-                        trackedThrownObject.rotation = Quaternion.Slerp(trackedThrownObject.rotation, Quaternion.LookRotation(trackedThrownObject.velocity), Time.deltaTime * 12f);
-                    }
-                }
-            }
-        }
-
-        private static void CheckStickDoubleTap(Camera cam, bool hitSomething, RaycastHit hit)
-        {
-            try
-            {
-                if (Player.leftController != null)
-                {
-                    bool isPressedThisFrame = Player.leftController.GetThumbstickTouch() && Player.leftController.GetThumbstickAxis().magnitude > 0.8f;
-
-                    if (isPressedThisFrame && !wasStickPressedLastFrame)
-                    {
-                        if (Time.time - lastClickTime < 0.4f)
-                        {
-                            // Double tap detected!
-                            if (isLockedIn)
-                            {
-                                ResetHomingState();
-                                MelonLogger.Msg("Lock
+                            
