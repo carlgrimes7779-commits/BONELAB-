@@ -34,20 +34,6 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateBool("Lock-In Mode Enabled", Color.green, isLockedIn, (value) =>
-            {
-                isLockedIn = value;
-                if (!isLockedIn)
-                {
-                    currentTargetTransform = null;
-                    MelonLogger.Msg("Lock-In Mode Disabled.");
-                }
-                else
-                {
-                    MelonLogger.Msg("Lock-In Mode Enabled.");
-                }
-            });
-
             category.CreateFunction("❌ Reset Lock-In Target", Color.red, () => 
             {
                 isLockedIn = false;
@@ -70,74 +56,71 @@ namespace HomingThrowMod
             {
                 Transform pointerTransform = cam.transform;
 
-                // If locked in on a specific target (object or person), stick permanently to them
-                if (isLockedIn && currentTargetTransform != null)
+                // Check if user is pointing at something via raycast
+                if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                 {
-                    targetPosition = currentTargetTransform.position;
-                    if (targetReticle != null)
+                    // If locked in, track moving targets smoothly without freezing the game
+                    if (isLockedIn && currentTargetTransform != null)
                     {
-                        targetReticle.transform.position = targetPosition + Vector3.up * 0.1f;
-                        targetReticle.SetActive(true);
+                        targetPosition = currentTargetTransform.position;
+                        if (targetReticle != null)
+                        {
+                            targetReticle.transform.position = targetPosition;
+                            targetReticle.transform.LookAt(cam.transform);
+                            targetReticle.SetActive(true);
+                        }
                     }
-                }
-                else
-                {
-                    // Raycast forward to find objects or people
-                    if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
+                    else
                     {
                         targetPosition = hit.point;
                         if (targetReticle != null)
                         {
                             targetReticle.transform.position = targetPosition;
+                            targetReticle.transform.LookAt(cam.transform);
                             targetReticle.SetActive(true);
+                        }
 
-                            // If lock-in mode is toggled on via menu, locking onto the raycast hit object/person
-                            if (isLockedIn && currentTargetTransform == null)
-                            {
-                                currentTargetTransform = hit.transform;
-                                MelonLogger.Msg(string.Format("Permanently Locked onto: {0}", hit.transform.name));
-                            }
+                        // Offhand trigger press activation simulation (using Menu button or alternate input if controller mapping is custom)
+                        // This allows you to press your offhand trigger/button to lock onto moving objects or people permanently
+                        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton3))
+                        {
+                            isLockedIn = true;
+                            currentTargetTransform = hit.transform;
+                            MelonLogger.Msg(string.Format("Locked onto moving target: {0}", hit.transform.name));
                         }
                     }
-                    else if (!isLockedIn && targetReticle != null)
-                    {
-                        targetReticle.SetActive(false);
-                    }
+                }
+                else if (!isLockedIn && targetReticle != null)
+                {
+                    targetReticle.SetActive(false);
                 }
             }
 
-            // Apply homing trajectory force if an object is tracked
-            if (currentThrownBody != null)
+            // Smooth homing physics toward locked moving target
+            if (currentThrownBody != null && isLockedIn)
             {
+                if (currentTargetTransform != null)
+                {
+                    targetPosition = currentTargetTransform.position;
+                }
+
                 Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
                 float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 15f);
-                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 12f);
+                currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 15f);
             }
         }
 
         private static void CreateTargetReticle()
         {
-            // Create a 2D-style transparent crosshair plane/quad
             targetReticle = GameObject.CreatePrimitive(PrimitiveType.Quad);
             targetReticle.name = "HomingCrosshairReticle";
-            targetReticle.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
 
-            // Remove collider so it never interacts physically with the world
             Collider col = targetReticle.GetComponent<Collider>();
             if (col != null)
             {
                 GameObject.Destroy(col);
             }
 
-            // Apply transparent 2D crosshair shader styling
             Renderer renderer = targetReticle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material.shader = Shader.Find("Transparent/Diffuse");
-                renderer.material.color = new Color(0f, 1f, 1f, 0.8f); // Cyan transparent look
-            }
-
-            targetReticle.SetActive(false);
-        }
-    }
-}
+            
