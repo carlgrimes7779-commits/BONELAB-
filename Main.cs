@@ -17,7 +17,7 @@ namespace HomingThrowMod
             MelonLogger.Msg("Homing throw mod initializing menu...");
 
             // Create main page under BoneMenu Root
-            Page category = Page.Category("Homing Throw Quest", Color.yellow);
+            Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
             // Add enable/disable toggle
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -28,4 +28,3 @@ namespace HomingThrowMod
         }
     }
 }
-
