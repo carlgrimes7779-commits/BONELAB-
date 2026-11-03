@@ -104,6 +104,7 @@ namespace HomingThrowMod
                 }
             }
 
+            // Homing execution block
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -112,7 +113,8 @@ namespace HomingThrowMod
                     for (int i = 0; i < allBodies.Length; i++)
                     {
                         Rigidbody rb = allBodies[i];
-                        if (rb != null && rb.velocity.magnitude > 4f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
+                        // Expanded initial velocity threshold to catch blind/behind-the-back throws instantly
+                        if (rb != null && rb.velocity.magnitude > 2.5f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj && rb.position.sqrMagnitude > 1f)
                         {
                             string objName = rb.gameObject.name.ToLower();
                             bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
@@ -121,7 +123,7 @@ namespace HomingThrowMod
                             {
                                 trackedThrownObject = rb;
                                 throwStartTime = Time.time;
-                                MelonLogger.Msg("Tracking weapon: " + rb.gameObject.name);
+                                MelonLogger.Msg("Tracking weapon 360°: " + rb.gameObject.name);
                                 break;
                             }
                         }
@@ -130,7 +132,8 @@ namespace HomingThrowMod
 
                 if (trackedThrownObject != null)
                 {
-                    if (Time.time - throwStartTime > 4f)
+                    // Timeout safety if it misses or takes too long (increased to 6 seconds for long curve shots)
+                    if (Time.time - throwStartTime > 6f)
                     {
                         trackedThrownObject = null;
                         return;
@@ -141,9 +144,29 @@ namespace HomingThrowMod
                         targetPosition = currentTargetTransform.position;
                     }
 
-                    Vector3 directionToTarget = (targetPosition - trackedThrownObject.position).normalized;
-                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 20f);
-                    trackedThrownObject.velocity = Vector3.Slerp(trackedThrownObject.velocity, directionToTarget * currentSpeed, Time.deltaTime * 25f);
+                    // Calculate vector straight to target
+                    Vector3 toTarget = targetPosition - trackedThrownObject.position;
+                    float distanceToTarget = toTarget.magnitude;
+
+                    // If we are close enough, let physics take over so it impacts solidly instead of orbiting
+                    if (distanceToTarget < 0.75f)
+                    {
+                        trackedThrownObject = null;
+                        return;
+                    }
+
+                    // Aggressive 360-degree curving calculation (forces velocity vector to bend toward target even if thrown backward)
+                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 25f);
+                    Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
+
+                    // Direct interpolation overrides existing velocity to pull it around corners or behind you
+                    trackedThrownObject.velocity = Vector3.Lerp(trackedThrownObject.velocity, desiredVelocity, Time.deltaTime * 18f);
+
+                    // Align the physical object's rotation towards the flight path for clean stabs/impacts
+                    if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
+                    {
+                        trackedThrownObject.rotation = Quaternion.Slerp(trackedThrownObject.rotation, Quaternion.LookRotation(trackedThrownObject.velocity), Time.deltaTime * 12f);
+                    }
                 }
             }
         }
@@ -208,7 +231,7 @@ namespace HomingThrowMod
             laserLine.positionCount = 2;
 
             Shader sh = Shader.Find("GUI/Text Shader");
-            if (sh == null) sh = Shader.Find("Unlit/Color");
+            if (sh == null) sh = Shader.Find("Unlit/Null");
 
             if (sh != null)
             {
