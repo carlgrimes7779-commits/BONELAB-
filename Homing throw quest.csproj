@@ -1,26 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="MelonLoader">
-      <HintPath>Refs/MelonLoader.dll</HintPath>
+      <HintPath>Refs\MelonLoader.dll</HintPath>
     </Reference>
     <Reference Include="BoneLib">
-      <HintPath>Refs/BoneLib.dll</HintPath>
+      <HintPath>Refs\BoneLib.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>Refs/UnityEngine.dll</HintPath>
+      <HintPath>Refs\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Refs/UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>Refs\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>Refs/UnityEngine.PhysicsModule.dll</HintPath>
+      <HintPath>Refs\UnityEngine.PhysicsModule.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>
