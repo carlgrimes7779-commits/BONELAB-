@@ -57,4 +57,8 @@ namespace HomingThrowMod
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam
+            Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
+            Vector3 aimDirection = cam.transform.forward;
+
+            int layerMask = ~18;
+            Ray
