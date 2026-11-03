@@ -27,30 +27,55 @@ namespace HomingThrowMod
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
-            category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
-            {
-                isHomingEnabled = value;
-                if (!isHomingEnabled) ResetHomingState();
-            });
+            category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, OnHomingToggled);
+            category.CreateFunction("🎯 Lock Target", Color.green, OnLockTargetClicked);
+            category.CreateFunction("❌ Reset Lock", Color.red, OnResetLockClicked);
+        }
 
-            category.CreateFunction("🎯 Lock Target", Color.green, () => 
-            {
-                Camera cam = Camera.main;
-                if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
-                {
-                    isLockedIn = true;
-                    currentTargetTransform = hit.transform;
-                    MelonLogger.Msg("Locked target: " + hit.transform.name);
-                }
-            });
+        private static void OnHomingToggled(bool value)
+        {
+            isHomingEnabled = value;
+            if (!isHomingEnabled) ResetHomingState();
+        }
 
-            category.CreateFunction("❌ Reset Lock", Color.red, () => 
+        private static void OnLockTargetClicked()
+        {
+            Camera cam = Camera.main;
+            if (cam != null && Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit hit, 200f))
             {
-                ResetHomingState();
-                MelonLogger.Msg("Lock-In state reset.");
-            });
+                isLockedIn = true;
+                currentTargetTransform = hit.transform;
+                MelonLogger.Msg("Locked target: " + hit.transform.name);
+            }
+        }
+
+        private static void OnResetLockClicked()
+        {
+            ResetHomingState();
+            MelonLogger.Msg("Lock-In state reset.");
         }
 
         public override void OnUpdate()
         {
-            if (!isHoming
+            if (!isHomingEnabled) return;
+
+            if (targetReticle == null) CreateCrosshairReticle();
+            if (laserLineObj == null) CreateLaserLine();
+
+            Camera cam = Camera.main;
+            if (cam == null) return;
+
+            Vector3 offhandOrigin = cam.transform.position + (cam.transform.right * -0.25f) + (cam.transform.forward * 0.2f) - (cam.transform.up * 0.15f);
+            Vector3 aimDirection = cam.transform.forward;
+
+            if (isLockedIn && currentTargetTransform != null)
+            {
+                targetPosition = currentTargetTransform.position;
+                if (targetReticle != null)
+                {
+                    targetReticle.transform.position = targetPosition;
+                    targetReticle.transform.LookAt(cam.transform);
+                    targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+                    targetReticle.SetActive(true);
+                }
+                if (
