@@ -13,10 +13,6 @@ namespace HomingThrowMod
         public static bool isHomingEnabled = true;
         public static bool isLockedIn = false;
 
-        // BoneMenu configurable lock-in mode: 0 = Left Joystick Double-Tap, 1 = Right Joystick Double-Tap, 2 = Instant Pointer Click
-        public static int lockModeIndex = 0;
-        private static readonly string[] lockModeNames = { "Left Joystick Double-Tap", "Right Joystick Double-Tap", "Instant Pointer Click" };
-
         private static GameObject targetReticle;
         private static GameObject laserLineObj;
         private static LineRenderer laserLine;
@@ -38,8 +34,6 @@ namespace HomingThrowMod
                 isHomingEnabled = value;
                 if (!isHomingEnabled) ResetHomingState();
             });
-
-            category.CreateEnum("Lock-In Trigger Method", Color.white, 0, (System.Enum)(object)(LockMode)0, (value) => { });
 
             category.CreateFunction("🎯 Force Lock Target", Color.green, () => 
             {
@@ -70,5 +64,44 @@ namespace HomingThrowMod
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask, QueryTriggerInteraction.Ignore);
 
-            // Handle input based on selected method
-            CheckControllerInput(cam, hitSomething, hit
+            CheckControllerInput(cam, hitSomething, hit);
+
+            if (isLockedIn && currentTargetTransform != null)
+            {
+                targetPosition = currentTargetTransform.position;
+                if (targetReticle != null)
+                {
+                    targetReticle.transform.position = targetPosition;
+                    targetReticle.transform.LookAt(cam.transform);
+                    targetReticle.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+                    targetReticle.SetActive(true);
+                }
+                if (laserLine != null) laserLine.enabled = false;
+            }
+            else
+            {
+                if (hitSomething)
+                {
+                    targetPosition = hit.point;
+
+                    if (laserLine != null)
+                    {
+                        laserLine.enabled = true;
+                        laserLine.SetPosition(0, offhandOrigin);
+                        laserLine.SetPosition(1, targetPosition);
+                    }
+
+                    if (targetReticle != null)
+                    {
+                        targetReticle.transform.position = targetPosition;
+                        targetReticle.transform.LookAt(cam.transform);
+
+                        float dist = Vector3.Distance(offhandOrigin, targetPosition);
+                        float scale = Mathf.Clamp(dist * 0.05f, 0.2f, 1.5f);
+                        targetReticle.transform.localScale = new Vector3(scale, scale, scale);
+                        targetReticle.SetActive(true);
+                    }
+                }
+                else
+                {
+                    if (laserLine != null) laserLine.enabled = false;
