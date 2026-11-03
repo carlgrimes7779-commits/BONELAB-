@@ -20,7 +20,7 @@ namespace HomingThrowMod
 
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod Initialized!");
+            MelonLogger.Msg("Homing Throw Mod Initialized Successfully.");
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
@@ -37,7 +37,6 @@ namespace HomingThrowMod
             category.CreateBool("Lock-In Mode", Color.green, isLockedIn, (value) => 
             {
                 isLockedIn = value;
-                MelonLogger.Msg("Lock-In Mode toggled.");
                 if (!isLockedIn)
                 {
                     currentTargetTransform = null;
@@ -51,15 +50,13 @@ namespace HomingThrowMod
                 {
                     isLockedIn = true;
                     currentTargetTransform = hit.transform;
-                    MelonLogger.Msg("Target locked successfully.");
                 }
             });
 
-            category.CreateFunction("❌ Reset Lock-In Target", Color.red, () => 
+            category.CreateFunction("❌ Reset Target", Color.red, () => 
             {
                 isLockedIn = false;
                 currentTargetTransform = null;
-                MelonLogger.Msg("Target Unlocked.");
             });
         }
 
@@ -145,7 +142,6 @@ namespace HomingThrowMod
             }
 
             targetReticle.SetActive(false);
-            MelonLogger.Msg("Holographic crosshair created.");
         }
     }
 }
