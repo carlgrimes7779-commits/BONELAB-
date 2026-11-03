@@ -21,9 +21,9 @@ namespace HomingThrowMod
         private static Rigidbody? trackedThrownObject;
         private static float throwStartTime = 0f;
 
-        // Clean timer for double-tap detection using Unity real-time clock
-        private static float lastClickTime = 0f;
-        private static bool isStickTriggered = false;
+        // Hover lock-on timer state
+        private static Transform? hoveredTransform;
+        private static float hoverStartTime = 0f;
 
         public override void OnInitializeMelon()
         {
@@ -65,8 +65,28 @@ namespace HomingThrowMod
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
 
-            // Safe cross-platform joystick check for Quest runtime
-            CheckJoystickDoubleTap(hitSomething, hit);
+            // Pointer hover lock-on calculation
+            if (!isLockedIn && hitSomething && hit.transform != null)
+            {
+                if (hoveredTransform == hit.transform)
+                {
+                    if (Time.time - hoverStartTime > 0.75f)
+                    {
+                        isLockedIn = true;
+                        currentTargetTransform = hit.transform;
+                        MelonLogger.Msg("Hover locked onto target: " + hit.transform.name);
+                    }
+                }
+                else
+                {
+                    hoveredTransform = hit.transform;
+                    hoverStartTime = Time.time;
+                }
+            }
+            else if (!hitSomething && !isLockedIn)
+            {
+                hoveredTransform = null;
+            }
 
             if (isLockedIn && currentTargetTransform != null)
             {
@@ -180,58 +200,12 @@ namespace HomingThrowMod
             }
         }
 
-        private static void CheckJoystickDoubleTap(bool hitSomething, RaycastHit hit)
-        {
-            try
-            {
-                // Poll standard XR joystick click input safely
-                bool isPressingJoystick = UnityEngine.Input.GetKey(KeyCode.JoystickButton8) || UnityEngine.Input.GetKey(KeyCode.Joystick1Button8);
-
-                if (isPressingJoystick && !isStickTriggered)
-                {
-                    isStickTriggered = true;
-                    if (Time.time - lastClickTime < 0.4f)
-                    {
-                        ToggleLockState(hitSomething, hit);
-                        lastClickTime = 0f;
-                    }
-                    else
-                    {
-                        lastClickTime = Time.time;
-                    }
-                }
-                else if (!isPressingJoystick)
-                {
-                    isStickTriggered = false;
-                }
-            }
-            catch
-            {
-                // Fallback catch for platform input exceptions
-            }
-        }
-
-        private static void ToggleLockState(bool hitSomething, RaycastHit hit)
-        {
-            if (isLockedIn)
-            {
-                ResetHomingState();
-                MelonLogger.Msg("Lock-in cleared.");
-            }
-            else if (hitSomething && hit.transform != null)
-            {
-                isLockedIn = true;
-                currentTargetTransform = hit.transform;
-                MelonLogger.Msg("Locked onto target: " + hit.transform.name);
-            }
-        }
-
         private static void LockTargetFromPointer()
         {
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            int layerMask = -18;
+            int layerMask = ~18;
             RaycastHit hit;
             if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask))
             {
@@ -248,6 +222,7 @@ namespace HomingThrowMod
         {
             isLockedIn = false;
             currentTargetTransform = null;
+            hoveredTransform = null;
             trackedThrownObject = null;
             if (targetReticle != null) targetReticle.SetActive(false);
             if (laserLine != null) laserLine.enabled = false;
