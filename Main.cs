@@ -56,5 +56,5 @@ namespace HomingThrowQuest
                         ResetLock();
                     }
                 }
-                }
-                }
+            }
+                
