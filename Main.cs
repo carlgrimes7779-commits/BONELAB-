@@ -42,7 +42,7 @@ namespace HomingThrowMod
                 {
                     isLockedIn = true;
                     currentTargetTransform = hit.transform;
-                    MelonLogger.Msg($"Locked target: {hit.transform.name}");
+                    MelonLogger.Msg("Locked target: " + hit.transform.name);
                 }
             });
 
@@ -72,7 +72,7 @@ namespace HomingThrowMod
                 {
                     targetReticle.transform.position = targetPosition;
                     targetReticle.transform.LookAt(cam.transform);
-                    targetReticle.transform.localScale = new Vector3(0.15f, 0.15f, 0.15f); // Clean dot indicator
+                    targetReticle.transform.localScale = new Vector3(0.15f, 0.15f, 0.15f);
                     targetReticle.SetActive(true);
                 }
                 if (laserLine != null) laserLine.enabled = false;
@@ -108,7 +108,6 @@ namespace HomingThrowMod
                 }
             }
 
-            // Homing trajectory logic for blunt and bladed weapons
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -118,11 +117,4 @@ namespace HomingThrowMod
                     {
                         if (rb != null && rb.velocity.magnitude > 3f && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
                         {
-                            string objName = rb.gameObject.name.ToLower();
-                            bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
-                                                 objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || 
-                                                 objName.Contains("prop") || rb.mass < 15f;
-
-                            if (isBluntOrBladed)
-                            {
-                                tracked
+                            string
