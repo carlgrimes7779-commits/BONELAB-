@@ -22,7 +22,7 @@ namespace HomingThrowMod
         {
             MelonLogger.Msg("Homing Throw Mod Initialized!");
 
-            // Create BoneMenu UI
+            // Create BoneMenu UI entry
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
 
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -35,7 +35,7 @@ namespace HomingThrowMod
                 }
             });
 
-            category.CreateFunction("Reset Lock-In", Color.red, () => 
+            category.CreateFunction("Reset Lock-In Target", Color.red, () => 
             {
                 isLockedIn = false;
                 currentTargetTransform = null;
@@ -46,18 +46,18 @@ namespace HomingThrowMod
         {
             if (!isHomingEnabled) return;
 
-            // Initialize visual target reticle if missing
+            // Initialize visual reticle sphere if missing
             if (targetReticle == null)
             {
                 CreateTargetReticle();
             }
 
-            // Raycast targeting logic from right hand or head
+            // Raycast targeting logic from hand or head
             if (Player.PhysicsRig != null)
             {
                 Transform pointerTransform = Player.RightHand != null ? Player.RightHand.transform : Player.Head.transform;
 
-                // Handle Lock-In tracking mode
+                // Lock-In tracking mode
                 if (isLockedIn && currentTargetTransform != null)
                 {
                     targetPosition = currentTargetTransform.position;
@@ -69,7 +69,7 @@ namespace HomingThrowMod
                 }
                 else
                 {
-                    // Raycast out to find surfaces or objects
+                    // Raycast forward to locate surface or enemy NPC
                     if (Physics.Raycast(pointerTransform.position, pointerTransform.forward, out RaycastHit hit, 100f))
                     {
                         targetPosition = hit.point;
@@ -79,7 +79,7 @@ namespace HomingThrowMod
                             targetReticle.SetActive(true);
                         }
 
-                        // Primary controller trigger click locks target
+                        // Right index trigger click locks target
                         if (Player.RightController != null && Player.RightController.GetIndexDown())
                         {
                             isLockedIn = true;
@@ -93,7 +93,7 @@ namespace HomingThrowMod
                     }
                 }
 
-                // Press menu button to unlock target
+                // Menu button click unlocks target
                 if (isLockedIn && Player.RightController != null && Player.RightController.GetMenuButtonDown())
                 {
                     isLockedIn = false;
@@ -102,19 +102,36 @@ namespace HomingThrowMod
                 }
             }
 
-            // Apply homing trajectory force to active thrown objects
+            // Apply trajectory force to thrown object towards target position
             if (currentThrownBody != null)
             {
                 Vector3 directionToTarget = (targetPosition - currentThrownBody.position).normalized;
                 float currentSpeed = Mathf.Max(currentThrownBody.velocity.magnitude, 15f);
                 
-                // Curve object towards target
                 currentThrownBody.velocity = Vector3.Lerp(currentThrownBody.velocity, directionToTarget * currentSpeed, Time.deltaTime * 12f);
             }
         }
 
         private static void CreateTargetReticle()
         {
-            // Create target indicator sphere
             targetReticle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            targetRet
+            targetReticle.name = "HomingTargetReticle";
+            targetReticle.transform.localScale = new Vector3(0.25f, 0.25f, 0.25f);
+
+            Collider col = targetReticle.GetComponent<Collider>();
+            if (col != null)
+            {
+                Object.Destroy(col);
+            }
+
+            Renderer renderer = targetReticle.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.material.shader = Shader.Find("Unlit/Color");
+                renderer.material.color = Color.cyan;
+            }
+
+            targetReticle.SetActive(false);
+        }
+    }
+}
