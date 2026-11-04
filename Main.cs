@@ -3,7 +3,7 @@ using BoneLib;
 using BoneLib.BoneMenu;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.0.0", "Author")]
+[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.1.0", "Author")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace HomingThrowMod
@@ -24,9 +24,14 @@ namespace HomingThrowMod
         private static Transform? hoveredTransform;
         private static float hoverStartTime = 0f;
 
+        // Steering configuration
+        private const float STEERING_STRENGTH = 18f;
+        private const float MAX_HOMING_FLIGHT_TIME = 5f;
+        private const float MIN_THROW_SPEED = 1.2f;
+
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod Initialized.");
+            MelonLogger.Msg("Homing Throw Mod v1.1.0 Refactored & Initialized.");
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -64,22 +69,25 @@ namespace HomingThrowMod
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
 
-            // Hover lock-on calculation
+            // Target Validation Check on Raycast Hover
             if (!isLockedIn && hitSomething && hit.transform != null)
             {
-                if (hoveredTransform == hit.transform)
+                if (IsValidTarget(hit.transform, cam))
                 {
-                    if (Time.time - hoverStartTime > 0.75f)
+                    if (hoveredTransform == hit.transform)
                     {
-                        isLockedIn = true;
-                        currentTargetTransform = hit.transform;
-                        MelonLogger.Msg("Hover locked onto target: " + hit.transform.name);
+                        if (Time.time - hoverStartTime > 0.75f)
+                        {
+                            isLockedIn = true;
+                            currentTargetTransform = hit.transform;
+                            MelonLogger.Msg("Hover locked onto valid target: " + hit.transform.name);
+                        }
                     }
-                }
-                else
-                {
-                    hoveredTransform = hit.transform;
-                    hoverStartTime = Time.time;
+                    else
+                    {
+                        hoveredTransform = hit.transform;
+                        hoverStartTime = Time.time;
+                    }
                 }
             }
             else if (!hitSomething && !isLockedIn)
@@ -87,6 +95,7 @@ namespace HomingThrowMod
                 hoveredTransform = null;
             }
 
+            // Crosshair update
             if (isLockedIn && currentTargetTransform != null)
             {
                 targetPosition = currentTargetTransform.position;
@@ -101,7 +110,7 @@ namespace HomingThrowMod
             }
             else
             {
-                if (hitSomething)
+                if (hitSomething && IsValidTarget(hit.transform, cam))
                 {
                     targetPosition = hit.point;
 
@@ -130,7 +139,7 @@ namespace HomingThrowMod
                 }
             }
 
-            // Universal 360-degree homing execution block
+            // Homing Execution Loop
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -139,25 +148,31 @@ namespace HomingThrowMod
                     for (int i = 0; i < allBodies.Length; i++)
                     {
                         Rigidbody rb = allBodies[i];
-                        if (rb != null && rb.gameObject != targetReticle && rb.gameObject != laserLineObj)
+                        if (rb == null || rb.gameObject == targetReticle || rb.gameObject == laserLineObj) continue;
+
+                        float distToPlayer = Vector3.Distance(rb.position, cam.transform.position);
+                        float currentSpeed = rb.velocity.magnitude;
+                        Vector3 throwDir = rb.velocity.normalized;
+                        Vector3 awayFromPlayerDir = (rb.position - cam.transform.position).normalized;
+
+                        // Filtering: Ignore telekinesis/pulls, drops, or distant objects
+                        bool isNearPlayer = distToPlayer < 2.5f;
+                        bool hasReliableSpeed = currentSpeed >= MIN_THROW_SPEED;
+                        bool isMovingOutward = Vector3.Dot(throwDir, awayFromPlayerDir) > 0.25f;
+
+                        if (isNearPlayer && hasReliableSpeed && isMovingOutward)
                         {
-                            bool originatesNearPlayer = Vector3.Distance(rb.position, cam.transform.position) < 2.2f;
-                            
-                            // Lowered threshold from 4.0f down to 1.5f so soft tosses trigger homing easily
-                            bool isMovingFast = rb.velocity.magnitude > 1.5f;
+                            string objName = rb.gameObject.name.ToLower();
+                            bool isThrowWeapon = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
+                                                 objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || 
+                                                 objName.Contains("prop") || rb.mass < 18f;
 
-                            if (originatesNearPlayer && isMovingFast)
+                            if (isThrowWeapon)
                             {
-                                string objName = rb.gameObject.name.ToLower();
-                                bool isBluntOrBladed = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || objName.Contains("prop") || rb.mass < 15f;
-
-                                if (isBluntOrBladed)
-                                {
-                                    trackedThrownObject = rb;
-                                    throwStartTime = Time.time;
-                                    MelonLogger.Msg("Universal 360° homing tracking weapon: " + rb.gameObject.name);
-                                    break;
-                                }
+                                trackedThrownObject = rb;
+                                throwStartTime = Time.time;
+                                MelonLogger.Msg("Homing tracking engaged for: " + rb.gameObject.name);
+                                break;
                             }
                         }
                     }
@@ -165,7 +180,7 @@ namespace HomingThrowMod
 
                 if (trackedThrownObject != null)
                 {
-                    if (Time.time - throwStartTime > 6f)
+                    if (Time.time - throwStartTime > MAX_HOMING_FLIGHT_TIME)
                     {
                         trackedThrownObject = null;
                         return;
@@ -179,23 +194,57 @@ namespace HomingThrowMod
                     Vector3 toTarget = targetPosition - trackedThrownObject.position;
                     float distanceToTarget = toTarget.magnitude;
 
-                    if (distanceToTarget < 0.75f)
+                    // Relinquish control right before impact for hit physics registration
+                    if (distanceToTarget < 0.8f)
                     {
                         trackedThrownObject = null;
                         return;
                     }
 
-                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 30f);
+                    // Continuous Steering Force Calculation
+                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 22f);
                     Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
-
-                    trackedThrownObject.velocity = Vector3.Lerp(trackedThrownObject.velocity, desiredVelocity, Time.deltaTime * 24f);
+                    
+                    // Smooth continuous force vector interpolation
+                    Vector3 steeringForce = Vector3.ClampMagnitude(desiredVelocity - trackedThrownObject.velocity, STEERING_STRENGTH);
+                    trackedThrownObject.velocity += steeringForce * Time.deltaTime;
 
                     if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
                     {
-                        trackedThrownObject.rotation = Quaternion.Slerp(trackedThrownObject.rotation, Quaternion.LookRotation(trackedThrownObject.velocity), Time.deltaTime * 15f);
+                        trackedThrownObject.rotation = Quaternion.Slerp(
+                            trackedThrownObject.rotation, 
+                            Quaternion.LookRotation(trackedThrownObject.velocity), 
+                            Time.deltaTime * 14f
+                        );
                     }
                 }
             }
+        }
+
+        private static bool IsValidTarget(Transform target, Camera cam)
+        {
+            if (target == null) return false;
+
+            // Prevent self-targeting (Local Player Rig)
+            if (Player.rigManager != null && target.IsChildOf(Player.rigManager.transform))
+            {
+                return false;
+            }
+
+            // Prevent self-targeting by camera/head proximity
+            if (Vector3.Distance(target.position, cam.transform.position) < 1.0f)
+            {
+                return false;
+            }
+
+            // Prevent network avatar targeting (Fusion / Multiplayer compatibility)
+            string lowerName = target.name.ToLower();
+            if (lowerName.Contains("player") || lowerName.Contains("fusion") || lowerName.Contains("networkavatar") || lowerName.Contains("syncedrig"))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static void LockTargetFromPointer()
@@ -207,7 +256,7 @@ namespace HomingThrowMod
             RaycastHit hit;
             if (Physics.Raycast(cam.transform.position, cam.transform.forward, out hit, 200f, layerMask))
             {
-                if (hit.transform != null)
+                if (hit.transform != null && IsValidTarget(hit.transform, cam))
                 {
                     isLockedIn = true;
                     currentTargetTransform = hit.transform;
