@@ -3,7 +3,7 @@ using BoneLib;
 using BoneLib.BoneMenu;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.1.0", "Author")]
+[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.1.1", "Author")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace HomingThrowMod
@@ -31,7 +31,7 @@ namespace HomingThrowMod
 
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod v1.1.0 Refactored & Initialized.");
+            MelonLogger.Msg("Homing Throw Mod v1.1.1 Initialized.");
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -110,7 +110,7 @@ namespace HomingThrowMod
             }
             else
             {
-                if (hitSomething && IsValidTarget(hit.transform, cam))
+                if (hitSomething && hit.transform != null && IsValidTarget(hit.transform, cam))
                 {
                     targetPosition = hit.point;
 
@@ -155,7 +155,6 @@ namespace HomingThrowMod
                         Vector3 throwDir = rb.velocity.normalized;
                         Vector3 awayFromPlayerDir = (rb.position - cam.transform.position).normalized;
 
-                        // Filtering: Ignore telekinesis/pulls, drops, or distant objects
                         bool isNearPlayer = distToPlayer < 2.5f;
                         bool hasReliableSpeed = currentSpeed >= MIN_THROW_SPEED;
                         bool isMovingOutward = Vector3.Dot(throwDir, awayFromPlayerDir) > 0.25f;
@@ -205,7 +204,6 @@ namespace HomingThrowMod
                     float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 22f);
                     Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
                     
-                    // Smooth continuous force vector interpolation
                     Vector3 steeringForce = Vector3.ClampMagnitude(desiredVelocity - trackedThrownObject.velocity, STEERING_STRENGTH);
                     trackedThrownObject.velocity += steeringForce * Time.deltaTime;
 
@@ -225,21 +223,15 @@ namespace HomingThrowMod
         {
             if (target == null) return false;
 
-            // Prevent self-targeting (Local Player Rig)
-            if (Player.rigManager != null && target.IsChildOf(Player.rigManager.transform))
+            // Prevent self-targeting by camera/head proximity or player root naming
+            if (Vector3.Distance(target.position, cam.transform.position) < 1.2f)
             {
                 return false;
             }
 
-            // Prevent self-targeting by camera/head proximity
-            if (Vector3.Distance(target.position, cam.transform.position) < 1.0f)
-            {
-                return false;
-            }
-
-            // Prevent network avatar targeting (Fusion / Multiplayer compatibility)
             string lowerName = target.name.ToLower();
-            if (lowerName.Contains("player") || lowerName.Contains("fusion") || lowerName.Contains("networkavatar") || lowerName.Contains("syncedrig"))
+            if (lowerName.Contains("player") || lowerName.Contains("head") || lowerName.Contains("avatar") || 
+                lowerName.Contains("fusion") || lowerName.Contains("network") || lowerName.Contains("synced"))
             {
                 return false;
             }
