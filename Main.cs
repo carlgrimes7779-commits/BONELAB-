@@ -3,7 +3,7 @@ using BoneLib;
 using BoneLib.BoneMenu;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.1.1", "Author")]
+[assembly: MelonInfo(typeof(HomingThrowMod.HomingThrowMod), "Homing throw quest", "1.2.0", "Author")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace HomingThrowMod
@@ -24,14 +24,9 @@ namespace HomingThrowMod
         private static Transform? hoveredTransform;
         private static float hoverStartTime = 0f;
 
-        // Steering configuration
-        private const float STEERING_STRENGTH = 18f;
-        private const float MAX_HOMING_FLIGHT_TIME = 5f;
-        private const float MIN_THROW_SPEED = 1.2f;
-
         public override void OnInitializeMelon()
         {
-            MelonLogger.Msg("Homing Throw Mod v1.1.1 Initialized.");
+            MelonLogger.Msg("Homing Throw Mod v1.2.0 Initialized.");
 
             Page category = Page.Root.CreatePage("Homing Throw Quest", Color.yellow);
             category.CreateBool("Enable Homing", Color.cyan, isHomingEnabled, (value) => 
@@ -69,7 +64,7 @@ namespace HomingThrowMod
             RaycastHit hit;
             bool hitSomething = Physics.Raycast(offhandOrigin, aimDirection, out hit, 200f, layerMask);
 
-            // Target Validation Check on Raycast Hover
+            // Hover lock-on calculation
             if (!isLockedIn && hitSomething && hit.transform != null)
             {
                 if (IsValidTarget(hit.transform, cam))
@@ -80,7 +75,7 @@ namespace HomingThrowMod
                         {
                             isLockedIn = true;
                             currentTargetTransform = hit.transform;
-                            MelonLogger.Msg("Hover locked onto valid target: " + hit.transform.name);
+                            MelonLogger.Msg("Hover locked onto target: " + hit.transform.name);
                         }
                     }
                     else
@@ -139,7 +134,7 @@ namespace HomingThrowMod
                 }
             }
 
-            // Homing Execution Loop
+            // Instantaneous Release & Curve Homing Loop
             if (isLockedIn && targetPosition != Vector3.zero)
             {
                 if (trackedThrownObject == null)
@@ -151,26 +146,15 @@ namespace HomingThrowMod
                         if (rb == null || rb.gameObject == targetReticle || rb.gameObject == laserLineObj) continue;
 
                         float distToPlayer = Vector3.Distance(rb.position, cam.transform.position);
-                        float currentSpeed = rb.velocity.magnitude;
-                        Vector3 throwDir = rb.velocity.normalized;
-                        Vector3 awayFromPlayerDir = (rb.position - cam.transform.position).normalized;
 
-                        bool isNearPlayer = distToPlayer < 2.5f;
-                        bool hasReliableSpeed = currentSpeed >= MIN_THROW_SPEED;
-                        bool isMovingOutward = Vector3.Dot(throwDir, awayFromPlayerDir) > 0.25f;
-
-                        if (isNearPlayer && hasReliableSpeed && isMovingOutward)
+                        // Triggers instantly the moment an object near the player moves with any speed (> 0.2 m/s)
+                        if (distToPlayer < 2.0f && rb.velocity.magnitude > 0.2f)
                         {
-                            string objName = rb.gameObject.name.ToLower();
-                            bool isThrowWeapon = objName.Contains("knife") || objName.Contains("sword") || objName.Contains("axe") || 
-                                                 objName.Contains("hammer") || objName.Contains("blade") || objName.Contains("melee") || 
-                                                 objName.Contains("prop") || rb.mass < 18f;
-
-                            if (isThrowWeapon)
+                            if (IsValidTarget(rb.transform, cam))
                             {
                                 trackedThrownObject = rb;
                                 throwStartTime = Time.time;
-                                MelonLogger.Msg("Homing tracking engaged for: " + rb.gameObject.name);
+                                MelonLogger.Msg("Instant homing engaged for released item: " + rb.gameObject.name);
                                 break;
                             }
                         }
@@ -179,7 +163,7 @@ namespace HomingThrowMod
 
                 if (trackedThrownObject != null)
                 {
-                    if (Time.time - throwStartTime > MAX_HOMING_FLIGHT_TIME)
+                    if (Time.time - throwStartTime > 6f)
                     {
                         trackedThrownObject = null;
                         return;
@@ -190,21 +174,34 @@ namespace HomingThrowMod
                         targetPosition = currentTargetTransform.position;
                     }
 
-                    Vector3 toTarget = targetPosition - trackedThrownObject.position;
+                    Vector3 currentPos = trackedThrownObject.position;
+                    Vector3 toTarget = targetPosition - currentPos;
                     float distanceToTarget = toTarget.magnitude;
 
-                    // Relinquish control right before impact for hit physics registration
-                    if (distanceToTarget < 0.8f)
+                    // Release control right before impact for clean damage registration
+                    if (distanceToTarget < 0.7f)
                     {
                         trackedThrownObject = null;
                         return;
                     }
 
-                    // Continuous Steering Force Calculation
-                    float currentSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 22f);
-                    Vector3 desiredVelocity = toTarget.normalized * currentSpeed;
-                    
-                    Vector3 steeringForce = Vector3.ClampMagnitude(desiredVelocity - trackedThrownObject.velocity, STEERING_STRENGTH);
+                    // Obstacle avoidance & curve calculation via Raycast anticipation
+                    Vector3 desiredDir = toTarget.normalized;
+                    RaycastHit obstacleHit;
+                    if (Physics.Raycast(currentPos, desiredDir, out obstacleHit, Mathf.Min(distanceToTarget, 3.0f), ~18))
+                    {
+                        // If an obstacle is directly in the path, bend the steering vector upward and around it
+                        if (obstacleHit.transform != currentTargetTransform && !obstacleHit.transform.IsChildOf(currentTargetTransform))
+                        {
+                            desiredDir = (desiredDir + Vector3.up * 1.5f).normalized;
+                        }
+                    }
+
+                    float flightSpeed = Mathf.Max(trackedThrownObject.velocity.magnitude, 28f);
+                    Vector3 targetVelocity = desiredDir * flightSpeed;
+
+                    // High steering agility forces immediate curve response
+                    Vector3 steeringForce = Vector3.ClampMagnitude(targetVelocity - trackedThrownObject.velocity, 35f);
                     trackedThrownObject.velocity += steeringForce * Time.deltaTime;
 
                     if (trackedThrownObject.velocity.sqrMagnitude > 0.1f)
@@ -212,7 +209,7 @@ namespace HomingThrowMod
                         trackedThrownObject.rotation = Quaternion.Slerp(
                             trackedThrownObject.rotation, 
                             Quaternion.LookRotation(trackedThrownObject.velocity), 
-                            Time.deltaTime * 14f
+                            Time.deltaTime * 20f
                         );
                     }
                 }
@@ -223,7 +220,6 @@ namespace HomingThrowMod
         {
             if (target == null) return false;
 
-            // Prevent self-targeting by camera/head proximity or player root naming
             if (Vector3.Distance(target.position, cam.transform.position) < 1.2f)
             {
                 return false;
@@ -231,7 +227,8 @@ namespace HomingThrowMod
 
             string lowerName = target.name.ToLower();
             if (lowerName.Contains("player") || lowerName.Contains("head") || lowerName.Contains("avatar") || 
-                lowerName.Contains("fusion") || lowerName.Contains("network") || lowerName.Contains("synced"))
+                lowerName.Contains("fusion") || lowerName.Contains("network") || lowerName.Contains("synced") ||
+                lowerName.Contains("homing"))
             {
                 return false;
             }
